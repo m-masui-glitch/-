@@ -19,7 +19,7 @@ const COL_AGE         = -1;  // 年代（ある場合は列番号を設定）
 const COL_CYCLE       = 3;   // 周期
 const COL_EXPIRY      = 5;   // 有効期限
 const COL_LAST_VISIT  = 6;   // 最終来店日
-const COL_T           = 12;  // 更新列（読み取りのみ・表には出力しない）
+const COL_T           = 12;  // 更新列（分類に使用・表には出力しない）
 const COL_3K          = 13;  // 3回券セッション開始列（1/3）
 const COL_GRP         = 16;  // 最初の7列グループ開始列
 // ================
@@ -39,7 +39,11 @@ function updateCouponSummary() {
   const fontColors  = range.getFontColors();
   const backgrounds = range.getBackgrounds();
 
-  const all12 = [], all8 = [], all4 = [], all3k = [];
+  // 保有顧客（T=〇 or △）
+  const act12 = [], act8 = [], act4 = [], act3k = [];
+  // 離客（T=×）
+  const chu12 = [], chu8 = [], chu4 = [], chu3k = [];
+  // 期限切れ（有効期限なし or 赤セル）
   const expired = [];
 
   for (let r = 0; r < data.length; r++) {
@@ -47,7 +51,9 @@ function updateCouponSummary() {
     const name = String(row[COL_NAME] || '').trim();
     if (!name || _isLabelRow(name)) continue;
 
+    const tVal      = String(row[COL_T] || '').trim();
     const isExpired = _checkExpired(row, r, backgrounds);
+    const isChurned = (tVal === '×' || tVal === '✕');
 
     const sessions3k = [COL_3K, COL_3K + 1, COL_3K + 2].filter(c =>
       _isSessionDate(row[c]) && _isBlackText(_fc(fontColors, r, c))
@@ -67,19 +73,21 @@ function updateCouponSummary() {
                 : '-';
       const entry = [...base, t3k, ticket.used, ticket.remaining];
 
-      if (isExpired) expired.push([...base, ticket.type + '回券']);
-      else           _push(all12, all8, all4, ticket.type, entry);
+      if      (isExpired)  expired.push([...base, ticket.type + '回券']);
+      else if (isChurned)  _push(chu12, chu8, chu4, ticket.type, entry);
+      else                 _push(act12, act8, act4, ticket.type, entry);
 
     } else if (sessions3k > 0 || has3kYellow) {
       const used3k      = has3kYellow ? 0 : sessions3k;
       const remaining3k = 3 - used3k;
       const entry = [...base, used3k, remaining3k];
 
-      if (isExpired) expired.push([...base, '3回券']);
-      else           all3k.push(entry);
+      if      (isExpired)  expired.push([...base, '3回券']);
+      else if (isChurned)  chu3k.push(entry);
+      else                 act3k.push(entry);
 
     } else {
-      // チケット未購入：期限切れの場合のみ期限切れセクションへ
+      // チケット未購入：期限切れの場合のみ記録
       if (isExpired) expired.push([...base, '初回のみ']);
     }
   }
@@ -90,15 +98,25 @@ function updateCouponSummary() {
   dst.clearContents();
 
   const out = [];
-  const nAll = all12.length + all8.length + all4.length + all3k.length;
+  const nAct = act12.length + act8.length + act4.length + act3k.length;
+  const nChu = chu12.length + chu8.length + chu4.length + chu3k.length;
 
   // ── 保有顧客 ──
-  out.push(['▼ 保有顧客（' + nAll + '名）']);
+  out.push(['▼ 保有顧客（' + nAct + '名）']);
   out.push([]);
-  _appendSection(out, '12回券 購入者', all12, _buyerHeader('12'));
-  _appendSection(out, '8回券 購入者',  all8,  _buyerHeader('8'));
-  _appendSection(out, '4回券 購入者',  all4,  _buyerHeader('4'));
-  _appendSection(out, '3回券 購入者',  all3k, _only3kHeader());
+  _appendSection(out, '12回券 購入者', act12, _buyerHeader('12'));
+  _appendSection(out, '8回券 購入者',  act8,  _buyerHeader('8'));
+  _appendSection(out, '4回券 購入者',  act4,  _buyerHeader('4'));
+  _appendSection(out, '3回券 購入者',  act3k, _only3kHeader());
+  out.push([]);
+
+  // ── 離客 ──
+  out.push(['▼ 離客（' + nChu + '名）']);
+  out.push([]);
+  _appendSection(out, '12回券（離客）', chu12, _buyerHeader('12'));
+  _appendSection(out, '8回券（離客）',  chu8,  _buyerHeader('8'));
+  _appendSection(out, '4回券（離客）',  chu4,  _buyerHeader('4'));
+  _appendSection(out, '3回券（離客）',  chu3k, _only3kHeader());
   out.push([]);
 
   // ── 期限切れ（最下部）──
@@ -119,8 +137,9 @@ function updateCouponSummary() {
 
   SpreadsheetApp.getUi().alert(
     '集計完了！\n' +
-    '保有顧客 ' + nAll + '名（12回券:' + all12.length + ' 8回券:' + all8.length +
-    ' 4回券:' + all4.length + ' 3回券:' + all3k.length + '）\n' +
+    '保有顧客 ' + nAct + '名（12回券:' + act12.length + ' 8回券:' + act8.length +
+    ' 4回券:' + act4.length + ' 3回券:' + act3k.length + '）\n' +
+    '離客 ' + nChu + '名\n' +
     '期限切れ ' + expired.length + '名'
   );
 }
