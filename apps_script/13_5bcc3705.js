@@ -168,13 +168,20 @@ function _checkExpired(row, r, backgrounds) {
   return _isRed(_bg(backgrounds, r, COL_EXPIRY));
 }
 
+// 現在のチケット（最新購入分）を返す
+// ─ 7列グループ構造: [〇/●マーカー][回数券種別][購入日][s1][s2][s3][s4]
+// ─ 〇マーカーが新規購入、●マーカーが8/12回券の継続グループ
+// ─ 回数券の種類は〇グループの青3列の真ん中（col+1）から読み取る
+// ─ 途中で種類が変わっても「最後の〇」＝最新購入を採用する
 function _getCurrentTicket(row, r, fontColors, backgrounds) {
   let lastIdx = -1, lastType = null;
 
+  // 左から右へスキャンし、〇マーカーが出るたびに上書き → 最後の〇が最新購入
   for (let c = COL_GRP; c + 3 < row.length; c += 7) {
     const marker = String(row[c] || '').trim();
-    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break;
+    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break; // データ終端
     if (marker === '〇') {
+      // 青3列の真ん中（c+1）が回数券種別（4 / 8 / 12）
       const type = _normalizeType(row[c + 1]);
       if (type) { lastIdx = c; lastType = type; }
     }
@@ -182,18 +189,21 @@ function _getCurrentTicket(row, r, fontColors, backgrounds) {
   if (lastIdx === -1) return null;
 
   const typeNum      = parseInt(lastType);
+  // 4回券→1グループ、8回券→2グループ、12回券→3グループ
   const groupsNeeded = Math.ceil(typeNum / 4);
 
+  // 最初のセッションスロットが黄色 → 購入済み・未使用
   const firstSessCol = lastIdx + 3;
   if (!_isSessionDate(row[firstSessCol]) && _isYellow(_bg(backgrounds, r, firstSessCol))) {
     return { type: lastType, used: 0, remaining: typeNum };
   }
 
+  // 黒文字の日付のみ「使用済み」としてカウント（オレンジ=予定は残り扱い）
   let used = 0;
   for (let g = 0; g < groupsNeeded; g++) {
     const startCol = lastIdx + g * 7;
     if (startCol >= row.length) break;
-    if (g > 0 && String(row[startCol] || '').trim() === '〇') break;
+    if (g > 0 && String(row[startCol] || '').trim() === '〇') break; // 次の新規購入で停止
     for (let s = 3; s <= 6; s++) {
       const col = startCol + s;
       if (col < row.length && _isSessionDate(row[col]) && _isBlackText(_fc(fontColors, r, col))) {
