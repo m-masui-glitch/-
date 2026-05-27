@@ -75,7 +75,7 @@ function updateCouponSummary() {
                 : (tVal === '〇' ? '完了' : '-');
       const entry = [...base, t3k, ticket.used, ticket.remaining];
 
-      if      (isExpired)  expired.push([...base, tVal || '-', ticket.type + '回券']);
+      if      (isExpired)  expired.push([...base, ticket.type + '回券']);
       else if (isChurned)  _push(chu12, chu8, chu4, ticket.type, entry);
       else                 _push(act12, act8, act4, ticket.type, entry);
 
@@ -85,7 +85,7 @@ function updateCouponSummary() {
       const remaining3k = 3 - used3k;
       const entry = [...base, used3k, remaining3k];
 
-      if      (isExpired)  expired.push([...base, tVal || '-', '3回券']);
+      if      (isExpired)  expired.push([...base, '3回券']);
       else if (isChurned)  chu3k.push(entry);
       else                 act3k.push(entry);
 
@@ -93,7 +93,7 @@ function updateCouponSummary() {
       // 初回のみ
       const entry = [..._baseNoExpiry(row), tVal || '-'];
 
-      if      (isExpired)  expired.push([...base, tVal || '-', '初回のみ']);
+      if      (isExpired)  expired.push([...base, '初回のみ']);
       else if (isChurned)  chuFirst.push(entry);
       else                 actFirst.push(entry);
     }
@@ -317,7 +317,6 @@ function _expiredHeader() {
   if (COL_CYCLE >= 0)  h.push('周期');
   if (COL_EXPIRY >= 0) h.push('有効期限');
   if (COL_LAST_VISIT >= 0) h.push('最終来店日');
-  h.push('更新状況');
   h.push('最後のチケット');
   return h;
 }
