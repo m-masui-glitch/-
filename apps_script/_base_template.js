@@ -1,117 +1,243 @@
 // =====================================================================
-// 回数券集計スクリプト — 共通テンプレート
-// 各店舗のスプレッドシートに貼り付ける前に、下記「設定」セクションの
-// 列番号を店舗ごとに変更してください。
+// 回数券集計スクリプト — スタンダード版
+// CSVファイル: (全店舗共通)　顧客数（参考）: ―名
 //
 // 【使い方】
 // 1. スプレッドシートを開く → メニュー「拡張機能」→「Apps Script」
-// 2. このコードを貼り付けて保存
-// 3. 上部メニューに「回数券管理」が表示されるので
-//    「集計表を今すぐ更新」をクリック
+// 2. このコードを丸ごと貼り付けて保存（Ctrl+S）
+// 3. 上部メニュー「回数券管理」→「集計表を今すぐ更新」をクリック
 // =====================================================================
 
 // ===== 設定 =====
-const SOURCE_SHEET_NAME  = 'カルテ';  // データが入っているシート名
-const SUMMARY_SHEET_NAME = '集計';    // 集計結果を書き出すシート名
+const SOURCE_SHEET_NAME  = 'カルテ';  // ← シートのタブ名が違う場合は変更
+const SUMMARY_SHEET_NAME = '集計';
 
-// 列番号（0始まり：A列=0, B列=1, … Q列=16 …）
-const COL_NAME    = 4;   // 氏名の列
-const COL_T       = 12;  // 3回券完了マーカー（〇/×/✕）の列
-const COL_3K      = 13;  // 3回券セッション開始列（1/3 の列）
-const COL_GRP     = 16;  // 最初の7列グループ開始列（購入チケット履歴）
-// =================
-
-// =====================================================================
-// 以下は変更不要
-// =====================================================================
+// 列番号（0始まり：A=0, B=1, C=2...）　ない列は -1 に設定
+const COL_CUSTOMER_ID = 1;   // 顧客番号（ない場合は -1）
+const COL_NAME        = 4;   // 氏名
+const COL_GENDER      = -1;  // 性別（ある場合は列番号を設定）
+const COL_AGE         = -1;  // 年代（ある場合は列番号を設定）
+const COL_CYCLE       = 3;   // 周期
+const COL_EXPIRY      = 5;   // 有効期限
+const COL_LAST_VISIT  = 6;   // 最終来店日
+const COL_T           = 12;  // 3回券完了マーカーの列
+const COL_3K          = 13;  // 3回券セッション開始列（1/3）
+const COL_GRP         = 16;  // 最初の7列グループ開始列
+// ================
 
 function updateCouponSummary() {
   const ss  = SpreadsheetApp.getActiveSpreadsheet();
   const src = ss.getSheetByName(SOURCE_SHEET_NAME);
   if (!src) {
     SpreadsheetApp.getUi().alert(
-      '「' + SOURCE_SHEET_NAME + '」シートが見つかりません。\n' +
-      'シート名（タブ名）を確認してください。'
+      '「' + SOURCE_SHEET_NAME + '」シートが見つかりません。\nシート名（タブ名）を確認してください。'
     );
     return;
   }
 
-  const data    = src.getDataRange().getValues();
-  const results = [];
-  const totals  = { '3': 0, '4': 0, '8': 0, '12': 0 };
+  const data      = src.getDataRange().getValues();
+  const buyers12  = [];
+  const buyers8   = [];
+  const buyers4   = [];
+  const only3k    = [];
+  const firstOnly = [];
 
   for (let r = 0; r < data.length; r++) {
     const row  = data[r];
     const name = String(row[COL_NAME] || '').trim();
-
-    // 空行・ラベル行はスキップ
     if (!name || _isLabelRow(name)) continue;
 
-    const counts = { '3': 0, '4': 0, '8': 0, '12': 0 };
+    const tVal       = String(row[COL_T] || '').trim();
+    const sessions3k = [COL_3K, COL_3K + 1, COL_3K + 2]
+      .filter(c => _isSessionDate(row[c])).length;
+    const ticket     = _getCurrentTicket(row);
 
-    // 3回券：COL_3K ～ COL_3K+2 のいずれかに日付があれば1件
-    const has3k = [COL_3K, COL_3K + 1, COL_3K + 2]
-      .some(c => _isSessionDate(row[c]));
-    if (has3k) {
-      counts['3'] = 1;
-      totals['3']++;
-    }
+    if (ticket) {
+      const t3kStr = sessions3k > 0
+        ? (sessions3k + '/3 ' + (tVal === '〇' ? '完了' : '使用中'))
+        : (tVal === '〇' ? '完了' : '-');
+      const entry = [
+        ..._baseInfo(row),
+        t3kStr,
+        ticket.used,
+        ticket.remaining,
+        _fmtDate(ticket.purchaseDate)
+      ];
+      if      (ticket.type === '12') buyers12.push(entry);
+      else if (ticket.type === '8')  buyers8.push(entry);
+      else                           buyers4.push(entry);
 
-    // 4回券・8回券・12回券：COL_GRP から右へ7列ごとにスキャン
-    // 各グループの構造：[マーカー][種別][購入日][施術1][施術2][施術3][施術4]
-    //   〇 = 新規購入  ● = 継続（8・12回券の後半）  その他 = スキップ
-    for (let c = COL_GRP; c + 3 < row.length; c += 7) {
-      const marker = String(row[c] || '').trim();
+    } else if (sessions3k > 0) {
+      const status = (tVal === '〇') ? '完了・継続なし' : (sessions3k + '/3 使用中');
+      only3k.push([..._baseInfo(row), sessions3k, status]);
 
-      // 連続して空の場合はデータ終端
-      if (!marker && !row[c + 1] && !row[c + 2] && !row[c + 3]) break;
-
-      if (marker === '〇') {
-        const type = _normalizeType(row[c + 1]);
-        if (type) {
-          counts[type]++;
-          totals[type]++;
-        }
-      }
-      // ● は継続（二重カウントしない）
-    }
-
-    // 1種類以上購入がある顧客だけ出力
-    if (Object.values(counts).some(v => v > 0)) {
-      results.push([name, counts['3'], counts['4'], counts['8'], counts['12']]);
+    } else {
+      firstOnly.push([..._baseInfoNoExpiry(row), tVal || '-']);
     }
   }
 
-  // 集計シートに書き出し
   let dst = ss.getSheetByName(SUMMARY_SHEET_NAME);
   if (!dst) dst = ss.insertSheet(SUMMARY_SHEET_NAME);
   dst.clearContents();
 
-  dst.getRange(1, 1, 1, 5).setValues(
-    [['氏名', '3回券', '4回券', '8回券', '12回券']]
-  );
+  const rows = [];
+  rows.push(['【12回券 購入者】（' + buyers12.length + '名）']);
+  rows.push(_buyerHeader('12'));
+  buyers12.forEach(r => rows.push(r));
+  rows.push([]);
 
-  if (results.length > 0) {
-    dst.getRange(2, 1, results.length, 5).setValues(results);
+  rows.push(['【8回券 購入者】（' + buyers8.length + '名）']);
+  rows.push(_buyerHeader('8'));
+  buyers8.forEach(r => rows.push(r));
+  rows.push([]);
+
+  rows.push(['【4回券 購入者】（' + buyers4.length + '名）']);
+  rows.push(_buyerHeader('4'));
+  buyers4.forEach(r => rows.push(r));
+  rows.push([]);
+
+  rows.push(['【3回券のみ（' + only3k.length + '名 - 使用中または完了・追加購入なし）】']);
+  rows.push(_only3kHeader());
+  only3k.forEach(r => rows.push(r));
+  rows.push([]);
+
+  rows.push(['【初回のみ・回数券未購入（' + firstOnly.length + '名）】']);
+  rows.push(_firstOnlyHeader());
+  firstOnly.forEach(r => rows.push(r));
+
+  const maxCols = rows.reduce((m, r) => Math.max(m, r.length), 0);
+  const padded  = rows.map(r => {
+    const a = r.slice();
+    while (a.length < maxCols) a.push('');
+    return a;
+  });
+  if (padded.length > 0) {
+    dst.getRange(1, 1, padded.length, maxCols).setValues(padded);
   }
 
-  // 合計行
-  dst.getRange(results.length + 2, 1, 1, 5).setValues(
-    [['【合計】', totals['3'], totals['4'], totals['8'], totals['12']]]
-  );
-
   SpreadsheetApp.getUi().alert(
-    '集計完了！ ' + results.length + '名を集計しました。'
+    '集計完了！\n' +
+    '12回券：' + buyers12.length   + '名\n' +
+    '8回券：'  + buyers8.length    + '名\n' +
+    '4回券：'  + buyers4.length    + '名\n' +
+    '3回券のみ：' + only3k.length  + '名\n' +
+    '初回のみ：'  + firstOnly.length + '名'
   );
 }
 
-// ===== ヘルパー関数 =====
+// ===== 内部関数（変更不要） =====
+
+function _baseInfo(row) {
+  const a = [];
+  if (COL_CUSTOMER_ID >= 0) a.push(row[COL_CUSTOMER_ID] || '');
+  a.push(String(row[COL_NAME] || '').trim());
+  if (COL_GENDER >= 0)     a.push(row[COL_GENDER]    || '');
+  if (COL_AGE >= 0)        a.push(row[COL_AGE]       || '');
+  if (COL_CYCLE >= 0)      a.push(row[COL_CYCLE]     || '');
+  if (COL_EXPIRY >= 0)     a.push(_fmtDate(row[COL_EXPIRY]));
+  if (COL_LAST_VISIT >= 0) a.push(_fmtDate(row[COL_LAST_VISIT]));
+  return a;
+}
+
+function _baseInfoNoExpiry(row) {
+  const a = [];
+  if (COL_CUSTOMER_ID >= 0) a.push(row[COL_CUSTOMER_ID] || '');
+  a.push(String(row[COL_NAME] || '').trim());
+  if (COL_GENDER >= 0)     a.push(row[COL_GENDER]    || '');
+  if (COL_AGE >= 0)        a.push(row[COL_AGE]       || '');
+  if (COL_CYCLE >= 0)      a.push(row[COL_CYCLE]     || '');
+  if (COL_LAST_VISIT >= 0) a.push(_fmtDate(row[COL_LAST_VISIT]));
+  return a;
+}
+
+function _buyerHeader(type) {
+  const h = [];
+  if (COL_CUSTOMER_ID >= 0) h.push('顧客番号');
+  h.push('氏名');
+  if (COL_GENDER >= 0) h.push('性別');
+  if (COL_AGE >= 0)    h.push('年代');
+  if (COL_CYCLE >= 0)  h.push('周期');
+  if (COL_EXPIRY >= 0) h.push('有効期限');
+  if (COL_LAST_VISIT >= 0) h.push('最終来店日');
+  h.push('3回券');
+  h.push(type + '回券(使用)');
+  h.push(type + '回券(残り)');
+  h.push('購入日');
+  return h;
+}
+
+function _only3kHeader() {
+  const h = [];
+  if (COL_CUSTOMER_ID >= 0) h.push('顧客番号');
+  h.push('氏名');
+  if (COL_GENDER >= 0) h.push('性別');
+  if (COL_AGE >= 0)    h.push('年代');
+  if (COL_CYCLE >= 0)  h.push('周期');
+  if (COL_EXPIRY >= 0) h.push('有効期限');
+  if (COL_LAST_VISIT >= 0) h.push('最終来店日');
+  h.push('3回券(使用)');
+  h.push('状態');
+  return h;
+}
+
+function _firstOnlyHeader() {
+  const h = [];
+  if (COL_CUSTOMER_ID >= 0) h.push('顧客番号');
+  h.push('氏名');
+  if (COL_GENDER >= 0) h.push('性別');
+  if (COL_AGE >= 0)    h.push('年代');
+  if (COL_CYCLE >= 0)  h.push('周期');
+  if (COL_LAST_VISIT >= 0) h.push('最終来店日');
+  h.push('更新状況');
+  return h;
+}
+
+function _getCurrentTicket(row) {
+  let lastIdx  = -1;
+  let lastType = null;
+  let lastDate = null;
+
+  for (let c = COL_GRP; c + 3 < row.length; c += 7) {
+    const marker = String(row[c] || '').trim();
+    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break;
+    if (marker === '〇') {
+      const type = _normalizeType(row[c + 1]);
+      if (type) {
+        lastIdx  = c;
+        lastType = type;
+        lastDate = row[c + 2];
+      }
+    }
+  }
+  if (lastIdx === -1) return null;
+
+  const typeNum      = parseInt(lastType);
+  const groupsNeeded = Math.ceil(typeNum / 4);
+  let   used         = 0;
+
+  for (let g = 0; g < groupsNeeded; g++) {
+    const startCol = lastIdx + g * 7;
+    if (startCol >= row.length) break;
+    const marker = String(row[startCol] || '').trim();
+    if (g > 0 && marker === '〇') break;
+    for (let s = 3; s <= 6; s++) {
+      if (startCol + s < row.length && _isSessionDate(row[startCol + s])) used++;
+    }
+  }
+
+  return { type: lastType, used, remaining: typeNum - used, purchaseDate: lastDate };
+}
+
+function _fmtDate(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return val.getFullYear() + '/' + (val.getMonth() + 1) + '/' + val.getDate();
+  }
+  return String(val).trim();
+}
 
 function _isLabelRow(name) {
-  const LABELS = [
-    '周期空き', '有効期限２か月前', '要注意（1か月前）',
-    '有効期限２か月前', '期限切れ'
-  ];
+  const LABELS = ['周期空き', '有効期限２か月前', '要注意（1か月前）', '期限切れ'];
   return LABELS.includes(name) || /^Column\d/.test(name) || name.length > 40;
 }
 
@@ -122,19 +248,16 @@ function _isSessionDate(val) {
   const SKIP = new Set(['●', '〇', '×', '✕', '△', '‐', '-',
                         '都度', 'FALSE', 'TRUE', 'NG', '機械のみ 当日のみ']);
   if (SKIP.has(s)) return false;
-  return /\d/.test(s); // 数字が含まれていれば日付とみなす
+  return /\d/.test(s);
 }
 
 function _normalizeType(val) {
   if (!val) return null;
-  // 全角数字 → 半角
   const s = String(val).trim()
     .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
     .replace(/[^\d]/g, '');
   return ['4', '8', '12'].includes(s) ? s : null;
 }
-
-// ===== メニュー・トリガー =====
 
 function onOpen() {
   SpreadsheetApp.getUi()
