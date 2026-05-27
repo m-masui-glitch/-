@@ -81,10 +81,9 @@ function updateCouponSummary() {
 
     } else if (sessions3k > 0 || has3kYellow) {
       // 3回券のみ
-      const used3k   = has3kYellow ? 0 : sessions3k;
-      const status3k = has3kYellow ? '0/3 未使用'
-                     : (tVal === '〇' ? '完了・継続なし' : sessions3k + '/3 使用中');
-      const entry = [...base, used3k, status3k];
+      const used3k      = has3kYellow ? 0 : sessions3k;
+      const remaining3k = 3 - used3k;
+      const entry = [...base, used3k, remaining3k];
 
       if      (isExpired)  expired.push([...base, tVal || '-', '3回券']);
       else if (isChurned)  chu3k.push(entry);
@@ -115,7 +114,7 @@ function updateCouponSummary() {
   _appendSection(out, '12回券 購入者',       act12,    _buyerHeader('12'));
   _appendSection(out, '8回券 購入者',        act8,     _buyerHeader('8'));
   _appendSection(out, '4回券 購入者',        act4,     _buyerHeader('4'));
-  _appendSection(out, '3回券のみ',           act3k,    _only3kHeader());
+  _appendSection(out, '3回券 購入者',          act3k,    _only3kHeader());
   _appendSection(out, '初回のみ・回数券未購入', actFirst, _firstOnlyHeader());
   out.push([]);
 
@@ -125,7 +124,7 @@ function updateCouponSummary() {
   _appendSection(out, '12回券（離客）',          chu12,    _buyerHeader('12'));
   _appendSection(out, '8回券（離客）',           chu8,     _buyerHeader('8'));
   _appendSection(out, '4回券（離客）',           chu4,     _buyerHeader('4'));
-  _appendSection(out, '3回券のみ（離客）',        chu3k,    _only3kHeader());
+  _appendSection(out, '3回券（離客）',           chu3k,    _only3kHeader());
   _appendSection(out, '初回のみ（離客）',         chuFirst, _firstOnlyHeader());
   out.push([]);
 
@@ -295,7 +294,7 @@ function _only3kHeader() {
   if (COL_EXPIRY >= 0) h.push('有効期限');
   if (COL_LAST_VISIT >= 0) h.push('最終来店日');
   h.push('3回券(使用)');
-  h.push('状態');
+  h.push('3回券(残り)');
   return h;
 }
 function _firstOnlyHeader() {
