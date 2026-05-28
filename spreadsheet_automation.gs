@@ -1,21 +1,22 @@
 // ============================================================
 //  回数券管理システム（統合版）
-//  ① 集計表更新        : updateCouponSummary
-//  ② 月次売上目標レポート: generateNextMonthReport
+//  ① 集計表更新        → updateCouponSummary
+//  ② 月次売上目標シート → generateNextMonthReport
 //
-//  データソース：「顧客管理」シート（共通）
+//  両機能とも「顧客管理」シートを共通データソースとして使用
 // ============================================================
 
 // ─────────────────────────────────────────
-//  ★ 設定値（必要に応じて変更してください）
+//  ★ 設定値
 // ─────────────────────────────────────────
 const SOURCE_SHEET_NAME  = '顧客管理';
 const SUMMARY_SHEET_NAME = '集計';
+const VISIT_CYCLE        = 10;   // 平均来店周期（日）
 
 // 顧客管理シートの列番号（0始まり）
 const COL_CUSTOMER_ID = 1;
 const COL_NAME        = 4;
-const COL_GENDER      = -1;   // 列がなければ -1
+const COL_GENDER      = -1;
 const COL_AGE         = -1;
 const COL_CYCLE       = 3;
 const COL_EXPIRY      = 5;
@@ -24,13 +25,21 @@ const COL_T           = 12;
 const COL_3K          = 13;
 const COL_GRP         = 16;
 
-// 月次レポート設定
-const VISIT_CYCLE = 10;        // 平均来店周期（日）
-const TYPE_COLORS = {
-  '12回券': '#BDD7EE',
-  '8回券' : '#C6EFCE',
-  '4回券' : '#FFEB9C',
-  '3回券' : '#FCE4D6',
+// 月次レポート用カラーコード
+const COLORS = {
+  HEADER_BG   : '#1F4E79',
+  SECTION_BG  : '#2E75B6',
+  TOTAL_BG    : '#1F4E79',
+  SUBTOTAL_BG : '#DEEAF1',
+  NEW_SUB_BG  : '#E2EFDA',
+  INPUT_BG    : '#FFFFC0',   // 黄色：手入力
+  AUTO_BG     : '#F2F2F2',   // グレー：自動算出
+  TYPE_12     : '#BDD7EE',
+  TYPE_8      : '#C6EFCE',
+  TYPE_4      : '#FFEB9C',
+  TYPE_3      : '#FCE4D6',
+  OVERDUE     : '#FF0000',
+  URGENT      : '#FFC7CE',
 };
 
 // ─────────────────────────────────────────
@@ -39,14 +48,12 @@ const TYPE_COLORS = {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('回数券管理')
-    // ── 既存機能 ──
-    .addItem('集計表を今すぐ更新',           'updateCouponSummary')
-    .addItem('自動更新を設定する（1時間ごと）', 'setupTrigger')
-    .addItem('自動更新を止める',              'removeTrigger')
+    .addItem('集計表を今すぐ更新',              'updateCouponSummary')
+    .addItem('自動更新を設定する（1時間ごと）',  'setupTrigger')
+    .addItem('自動更新を止める',                'removeTrigger')
     .addSeparator()
-    // ── 月次レポート機能（新規追加） ──
-    .addItem('▶ 翌月レポートを今すぐ生成',    'generateNextMonthReport')
-    .addItem('⚙ 対象月を手動指定して生成',    'generateReportWithPrompt')
+    .addItem('▶ 翌月レポートを今すぐ生成',      'generateNextMonthReport')
+    .addItem('⚙ 対象月を手動指定して生成',      'generateReportWithPrompt')
     .addItem('📅 月次自動生成を設定（毎月25日）','setupMonthlyTrigger')
     .addToUi();
 }
@@ -168,11 +175,10 @@ function removeTrigger() {
 }
 
 // ============================================================
-//  ② 月次売上目標レポート（新規追加）
-//     「顧客管理」シートを直接読んで翌月の更新見込みを生成
+//  ② 月次売上目標シート（新規追加）
 // ============================================================
 
-// 翌月レポートを自動生成（メニューから呼ぶ）
+// 翌月レポートを自動生成
 function generateNextMonthReport() {
   const today  = new Date();
   const target = new Date(today.getFullYear(), today.getMonth() + 1, 1);
@@ -188,23 +194,21 @@ function generateReportWithPrompt() {
   const year  = parseInt(text.slice(0, 4));
   const month = parseInt(text.slice(4, 6));
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-    ui.alert('年月の形式が正しくありません。\n例: 2026/7　または　202607');
+    ui.alert('年月の形式が正しくありません。例: 2026/7');
     return;
   }
   _runMonthlyReport(year, month);
 }
 
-// 毎月25日AM9時に自動実行するトリガーを設定
+// 毎月25日 AM9時に自動実行するトリガーを設定
 function setupMonthlyTrigger() {
   ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 'generateNextMonthReport')
+    .filter(t => t.getHandlerFunction() === 'scheduledMonthlyRun')
     .forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('generateNextMonthReport')
+  ScriptApp.newTrigger('scheduledMonthlyRun')
     .timeBased().onMonthDay(25).atHour(9).create();
   SpreadsheetApp.getUi().alert('✅ 毎月25日 AM9時に翌月レポートを自動生成するよう設定しました。');
 }
-
-// スケジュール実行用（トリガーから呼ばれる）
 function scheduledMonthlyRun() { generateNextMonthReport(); }
 
 // ── コアロジック ──
@@ -231,12 +235,12 @@ function _runMonthlyReport(year, month) {
     const name = String(row[COL_NAME] || '').trim();
     if (!name || _isLabelRow(name)) continue;
 
-    // 期限切れ・離客は対象外
+    // 期限切れ・離客はスキップ
     if (_checkExpired(row, r, backgrounds)) continue;
     const tVal = String(row[COL_T] || '').trim();
     if (tVal === '×' || tVal === '✕') continue;
 
-    // チケット情報を取得（既存ロジックを再利用）
+    // チケット情報（既存ロジック再利用）
     const ticket = _getCurrentTicket(row, r, fontColors, backgrounds);
     const sessions3k = [COL_3K, COL_3K + 1, COL_3K + 2].filter(c =>
       _isSessionDate(row[c]) && _isBlackText(_fc(fontColors, r, c))
@@ -256,14 +260,12 @@ function _runMonthlyReport(year, month) {
       continue;
     }
 
-    // 最終来店日
+    // 更新予定日 = 最終来店日 + 残り回数 × 来店周期
     const lastVisitRaw = row[COL_LAST_VISIT];
     const lastVisit    = lastVisitRaw instanceof Date ? lastVisitRaw : null;
-
-    // 更新予定日 = 最終来店日 + 残り回数 × 来店周期
-    let renewalDate = null;
+    let renewalDate    = null;
     if (lastVisit) {
-      renewalDate = new Date(lastVisit);
+      renewalDate = new Date(lastVisit.getTime());
       renewalDate.setDate(renewalDate.getDate() + remaining * VISIT_CYCLE);
     }
 
@@ -284,13 +286,8 @@ function _runMonthlyReport(year, month) {
     }
 
     customers.push({
-      id:          row[COL_CUSTOMER_ID] || '',
-      name:        name,
-      type:        couponType,
-      lastVisit:   lastVisit,
-      remaining:   remaining,
-      renewalDate: renewalDate,
-      status:      status,
+      id: row[COL_CUSTOMER_ID] || '',
+      name, couponType, lastVisit, remaining, renewalDate, status,
     });
   }
 
@@ -301,228 +298,299 @@ function _runMonthlyReport(year, month) {
   _createSalesSheet(ss, customers, monthStr, sheetId);
 
   ss.setActiveSheet(ss.getSheetByName('更新リスト_' + sheetId));
-  SpreadsheetApp.getUi().alert(
-    '✅ ' + monthStr + 'のレポートを生成しました！\n' +
-    '・更新リスト_' + sheetId + '\n' +
-    '・売上目標_'   + sheetId
-  );
+  SpreadsheetApp.getUi().alert('✅ ' + monthStr + 'のレポートを生成しました！\n・更新リスト_' + sheetId + '\n・売上目標_' + sheetId);
 }
 
-// 更新見込みリストシートを生成
+// ── 更新見込みリストシート ──
 function _createListSheet(ss, customers, monthStr, sheetId) {
-  const sheetName = '更新リスト_' + sheetId;
-  const old = ss.getSheetByName(sheetName);
+  const name = '更新リスト_' + sheetId;
+  const old  = ss.getSheetByName(name);
   if (old) ss.deleteSheet(old);
-  const sh = ss.insertSheet(sheetName);
+  const sh = ss.insertSheet(name);
 
   let row = 1;
 
   // タイトル
-  sh.getRange(row, 1, 1, 7).merge()
-    .setValue(monthStr + ' 回数券更新見込み客リスト（来店周期' + VISIT_CYCLE + '日ベース）')
-    .setFontSize(13).setFontWeight('bold').setFontColor('#1F4E79')
-    .setHorizontalAlignment('center').setVerticalAlignment('middle');
-  sh.setRowHeight(row, 32); row++;
+  _mergeSet(sh, row, 1, 7, monthStr + ' 回数券更新見込み客リスト（来店周期' + VISIT_CYCLE + '日ベース）',
+    { fontSize: 13, bold: true, color: '#FFFFFF', bg: COLORS.HEADER_BG, align: 'center', height: 30 });
+  row++;
 
-  sh.getRange(row, 1, 1, 7).merge()
-    .setValue('更新予定日 = 最終来店日 + 残り回数 × ' + VISIT_CYCLE + '日　／　赤＝期限超過（要フォロー）')
-    .setFontSize(9).setFontColor('#595959');
-  sh.setRowHeight(row, 16); row++;
+  _mergeSet(sh, row, 1, 7, '更新予定日 = 最終来店日 + 残り回数 × ' + VISIT_CYCLE + '日　／　赤＝期限超過（要フォロー）',
+    { fontSize: 9, color: '#595959', align: 'left', height: 16 });
+  row++;
 
   const sections = [
-    { title: '▼ 当月更新見込み（残0含む）',     filter: c => c.status.includes('当月') },
+    { title: '▼ 当月更新見込み（残0含む）',      filter: c => c.status.includes('当月') },
     { title: '▼ 要確認：更新期限超過（前月以前）', filter: c => c.status.includes('要確認') },
-    { title: '▼ 翌月以降',                      filter: c => c.status === '翌月以降' },
-    { title: '▼ 算出不可（都度来院）',            filter: c => c.status.includes('算出不可') },
+    { title: '▼ 翌月以降',                       filter: c => c.status === '翌月以降' },
+    { title: '▼ 算出不可（都度来院）',             filter: c => c.status.includes('算出不可') },
   ];
+
+  const typeColorMap = { '12回券': COLORS.TYPE_12, '8回券': COLORS.TYPE_8, '4回券': COLORS.TYPE_4, '3回券': COLORS.TYPE_3 };
 
   for (const sec of sections) {
     const group = customers.filter(sec.filter);
-    if (group.length === 0) continue;
+    if (!group.length) continue;
 
     row++;
-    sh.getRange(row, 1, 1, 7).merge()
-      .setValue(sec.title + '　（' + group.length + '名）')
-      .setBackground('#2E75B6').setFontColor('#FFFFFF')
-      .setFontWeight('bold').setFontSize(10).setVerticalAlignment('middle');
-    sh.setRowHeight(row, 22); row++;
+    _mergeSet(sh, row, 1, 7, sec.title + '　（' + group.length + '名）',
+      { bold: true, fontSize: 10, bg: COLORS.SECTION_BG, color: '#FFFFFF', align: 'left', height: 22 });
+    row++;
 
-    // ヘッダー
-    sh.getRange(row, 1, 1, 7)
-      .setValues([['顧客番号','氏名','券種','最終来店日','残り回数','更新予定日','ステータス']])
-      .setBackground('#1F4E79').setFontColor('#FFFFFF')
-      .setFontWeight('bold').setHorizontalAlignment('center');
-    sh.setRowHeight(row, 20); row++;
+    // ヘッダー行
+    const hRow = sh.getRange(row, 1, 1, 7);
+    hRow.setValues([['顧客番号', '氏名', '券種', '最終来店日', '残り回数', '更新予定日', 'ステータス']]);
+    _styleRange(hRow, { bg: COLORS.HEADER_BG, color: '#FFFFFF', bold: true, align: 'center' });
+    sh.setRowHeight(row, 20);
+    row++;
 
-    const couponOrder = ['12回券','8回券','4回券','3回券'];
-    for (const ct of couponOrder) {
-      const typeGroup = group.filter(c => c.type === ct)
-        .sort((a, b) => (a.renewalDate || new Date(9999,0)) - (b.renewalDate || new Date(9999,0)));
-      if (typeGroup.length === 0) continue;
+    for (const ct of ['12回券', '8回券', '4回券', '3回券']) {
+      const typeGroup = group.filter(c => c.couponType === ct)
+        .sort((a, b) => (a.renewalDate || new Date(9999, 0)) - (b.renewalDate || new Date(9999, 0)));
+      if (!typeGroup.length) continue;
 
-      // 券種サブ見出し
-      sh.getRange(row, 1, 1, 7).merge()
-        .setValue('  【' + ct + '】　' + typeGroup.length + '名')
-        .setBackground(TYPE_COLORS[ct] || '#EEEEEE')
-        .setFontWeight('bold').setFontSize(10);
-      sh.setRowHeight(row, 18); row++;
+      _mergeSet(sh, row, 1, 7, '  【' + ct + '】　' + typeGroup.length + '名',
+        { bold: true, bg: typeColorMap[ct], align: 'left', height: 18 });
+      row++;
 
       for (const c of typeGroup) {
         const isOverdue = c.status.includes('要確認');
         const isUrgent  = c.status.includes('残0') && !isOverdue;
-        const bg = isOverdue ? '#FF0000'
-                 : isUrgent  ? '#FFC7CE'
-                 : c.status.includes('当月') ? TYPE_COLORS[ct] : null;
-        const fc = isOverdue ? '#FFFFFF' : '#000000';
-
-        const lv = c.lastVisit   ? Utilities.formatDate(c.lastVisit,   'Asia/Tokyo', 'yyyy/MM/dd') : '—';
-        const rv = c.renewalDate ? Utilities.formatDate(c.renewalDate, 'Asia/Tokyo', 'yyyy/MM/dd') : '—';
-        const range = sh.getRange(row, 1, 1, 7);
-        range.setValues([[c.id, c.name, c.type, lv, c.remaining, rv, c.status]]);
-        if (bg) range.setBackground(bg).setFontColor(fc);
-        sh.setRowHeight(row, 17); row++;
+        const bg = isOverdue ? COLORS.OVERDUE : isUrgent ? COLORS.URGENT : (c.status.includes('当月') ? typeColorMap[ct] : null);
+        const fc = isOverdue ? '#FFFFFF' : null;
+        const lv = c.lastVisit   ? _fmtDate(c.lastVisit)   : '—';
+        const rv = c.renewalDate ? _fmtDate(c.renewalDate) : '—';
+        const r  = sh.getRange(row, 1, 1, 7);
+        r.setValues([[c.id, c.name, c.couponType, lv, c.remaining, rv, c.status]]);
+        if (bg) r.setBackground(bg);
+        if (fc) r.setFontColor(fc);
+        sh.setRowHeight(row, 17);
+        row++;
       }
     }
   }
 
-  [10,18,8,12,8,12,22].forEach((w, i) => sh.setColumnWidth(i + 1, w * 7));
+  [10, 18, 8, 12, 8, 12, 22].forEach((w, i) => sh.setColumnWidth(i + 1, w * 7));
   sh.setFrozenRows(1);
 }
 
-// 売上目標シートを生成
+// ── 売上目標シート（d390399準拠：B=自動算出 C=手入力 D=単価 E=小計 F=備考） ──
 function _createSalesSheet(ss, customers, monthStr, sheetId) {
-  const sheetName = '売上目標_' + sheetId;
-  const old = ss.getSheetByName(sheetName);
+  const name = '売上目標_' + sheetId;
+  const old  = ss.getSheetByName(name);
   if (old) ss.deleteSheet(old);
-  const sh = ss.insertSheet(sheetName);
+  const sh = ss.insertSheet(name);
 
-  const couponTypes = ['12回券','8回券','4回券','3回券'];
-  const mayCounts   = {};
-  couponTypes.forEach(ct => {
-    mayCounts[ct] = customers.filter(c => c.type === ct && c.status.includes('当月')).length;
-  });
+  // 列幅設定
+  [28, 16, 16, 14, 16, 14].forEach((w, i) => sh.setColumnWidth(i + 1, w * 7));
+
+  // 当月更新見込み件数カウント
+  const types    = ['12回券', '8回券', '4回券', '3回券'];
+  const autoCnt  = {};
+  types.forEach(t => { autoCnt[t] = customers.filter(c => c.couponType === t && c.status.includes('当月')).length; });
+
+  const typeColorMap = { '12回券': COLORS.TYPE_12, '8回券': COLORS.TYPE_8, '4回券': COLORS.TYPE_4, '3回券': COLORS.TYPE_3 };
 
   let r = 1;
 
-  sh.getRange(r,1,1,5).merge()
-    .setValue('売上目標設定シート　／　' + monthStr)
-    .setFontSize(15).setFontWeight('bold').setFontColor('#1F4E79').setHorizontalAlignment('center');
-  sh.setRowHeight(r, 36); r++;
+  // ── タイトル ──
+  _mergeSet(sh, r, 1, 6, '売上目標設定シート　／　' + monthStr,
+    { fontSize: 15, bold: true, color: '#1F4E79', align: 'center', height: 36 });
+  r++;
+  _mergeSet(sh, r, 1, 6, '※ 黄色セルを入力してください　　灰色セル＝自動算出（変更不要）',
+    { fontSize: 9, color: '#C00000', italic: true, align: 'left', height: 18 });
+  r++;
+  r++;  // 空行
 
-  sh.getRange(r,1,1,5).merge()
-    .setValue('※ 黄色セルに数値を入力すると合計が自動計算されます')
-    .setFontSize(9).setFontColor('#C00000').setFontStyle('italic');
-  sh.setRowHeight(r, 16); r++;
+  // ── 列ヘッダー ──
+  const colHdr = [['項目', '更新見込み件数\n（自動算出）', '実際の顧客数\n【手入力】', '単価（円）\n【要入力】', '小計（円）', '備考']];
+  const hdrRange = sh.getRange(r, 1, 1, 6);
+  hdrRange.setValues(colHdr);
+  _styleRange(hdrRange, { bg: COLORS.HEADER_BG, color: '#FFFFFF', bold: true, align: 'center', wrap: true });
+  sh.setRowHeight(r, 40);
   r++;
 
-  // 列ヘッダー
-  sh.getRange(r,1,1,5).setValues([['項目','件数（変更可）','単価（円）【要入力】','小計（円）','備考']])
-    .setBackground('#1F4E79').setFontColor('#FFFFFF').setFontWeight('bold')
-    .setHorizontalAlignment('center').setWrap(true);
-  sh.setRowHeight(r, 34); r++;
+  // ── 既存顧客セクション ──
+  _mergeSet(sh, r, 1, 6, '■ 既存顧客　回数券更新見込み（' + monthStr + '）',
+    { bold: true, fontSize: 11, bg: COLORS.SECTION_BG, color: '#FFFFFF', align: 'left', height: 22 });
+  r++;
 
-  // 既存顧客セクション
-  sh.getRange(r,1,1,5).merge()
-    .setValue('■ 既存顧客　回数券更新見込み（' + monthStr + '）')
-    .setBackground('#2E75B6').setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(11);
-  sh.setRowHeight(r, 22); r++;
+  const ticketStartRow = r;
+  const typeRows = {};
 
-  const ticketStart = r;
-  for (const ct of couponTypes) {
-    sh.getRange(r,1).setValue(ct + ' 更新見込み').setBackground(TYPE_COLORS[ct]).setFontWeight('bold');
-    sh.getRange(r,2).setValue(mayCounts[ct])
-      .setBackground('#FFFFC0').setFontWeight('bold').setHorizontalAlignment('center').setNumberFormat('0');
-    sh.getRange(r,3).setValue(0)
-      .setBackground('#FFFFC0').setFontColor('#C00000').setFontWeight('bold')
-      .setHorizontalAlignment('center').setNumberFormat('#,##0');
-    sh.getRange(r,4).setFormula('=B'+r+'*C'+r)
-      .setBackground('#F2F2F2').setFontWeight('bold').setHorizontalAlignment('right').setNumberFormat('#,##0');
-    sh.getRange(r,5).setValue(ct.replace('回券','') + '枚綴り');
-    sh.setRowHeight(r, 22); r++;
+  for (const ct of types) {
+    typeRows[ct] = r;
+    const cnt = autoCnt[ct];
+    const bg  = typeColorMap[ct];
+
+    // A: 項目名
+    _setCell(sh, r, 1, ct + ' 更新見込み', { bold: true, bg });
+    // B: 自動算出件数（グレー・参照用）
+    _setCell(sh, r, 2, cnt, { bg: COLORS.AUTO_BG, align: 'center', format: '0' });
+    // C: 実際の顧客数（黄色・手入力、初期値は自動算出値）
+    _setCell(sh, r, 3, cnt, { bold: true, color: '#C00000', bg: COLORS.INPUT_BG, align: 'center', format: '0' });
+    // D: 単価（黄色・要入力）
+    _setCell(sh, r, 4, 0,   { bold: true, color: '#C00000', bg: COLORS.INPUT_BG, align: 'center', format: '#,##0' });
+    // E: 小計 = C × D（グレー・自動）
+    sh.getRange(r, 5).setFormula('=C' + r + '*D' + r);
+    _setCell(sh, r, 5, null, { bold: true, bg: COLORS.AUTO_BG, align: 'right', format: '#,##0' });
+    sh.getRange(r, 5).setFormula('=C' + r + '*D' + r);
+    // F: 備考
+    _setCell(sh, r, 6, ct.replace('回券', '') + '枚綴り', {});
+    sh.setRowHeight(r, 22);
+    r++;
   }
-  const ticketEnd = r - 1;
 
-  // 既存小計
-  sh.getRange(r,1,1,3).merge()
-    .setValue('既存顧客　小計').setBackground('#DEEAF1').setFontWeight('bold')
-    .setFontColor('#1F4E79').setHorizontalAlignment('right').setFontSize(11);
-  sh.getRange(r,4).setFormula('=SUM(D'+ticketStart+':D'+ticketEnd+')')
-    .setBackground('#DEEAF1').setFontWeight('bold').setFontColor('#1F4E79')
-    .setHorizontalAlignment('right').setNumberFormat('#,##0').setFontSize(11);
+  const ticketEndRow = r - 1;
+
+  // 既存小計行
+  sh.getRange(r, 1, 1, 4).merge();
+  _setCell(sh, r, 1, '既存顧客　小計', { bold: true, fontSize: 11, color: '#1F4E79', bg: COLORS.SUBTOTAL_BG, align: 'right' });
+  sh.getRange(r, 5).setFormula('=SUM(E' + ticketStartRow + ':E' + ticketEndRow + ')');
+  _setCell(sh, r, 5, null, { bold: true, fontSize: 11, color: '#1F4E79', bg: COLORS.SUBTOTAL_BG, align: 'right', format: '#,##0' });
+  sh.getRange(r, 5).setFormula('=SUM(E' + ticketStartRow + ':E' + ticketEndRow + ')');
+  _setCell(sh, r, 6, '', { bg: COLORS.SUBTOTAL_BG });
   sh.setRowHeight(r, 24);
-  const existSubRow = r; r++;
-
-  // 新規顧客セクション
+  const existSubRow = r;
   r++;
-  sh.getRange(r,1,1,5).merge()
-    .setValue('■ 新規顧客')
-    .setBackground('#2E75B6').setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(11);
-  sh.setRowHeight(r, 22); r++;
 
-  sh.getRange(r,1).setValue('新規顧客数').setBackground('#FFF2CC').setFontWeight('bold');
-  sh.getRange(r,2).setValue(0)
-    .setBackground('#FFFFC0').setFontColor('#C00000').setFontWeight('bold')
-    .setHorizontalAlignment('center').setNumberFormat('0');
-  sh.getRange(r,3).setValue(0)
-    .setBackground('#FFFFC0').setFontColor('#C00000').setFontWeight('bold')
-    .setHorizontalAlignment('center').setNumberFormat('#,##0');
-  sh.getRange(r,4).setFormula('=B'+r+'*C'+r)
-    .setBackground('#F2F2F2').setFontWeight('bold').setHorizontalAlignment('right').setNumberFormat('#,##0');
-  sh.getRange(r,5).setValue('初回チケット平均単価');
+  // ── 新規顧客セクション ──
+  r++;
+  _mergeSet(sh, r, 1, 6, '■ 新規顧客',
+    { bold: true, fontSize: 11, bg: COLORS.SECTION_BG, color: '#FFFFFF', align: 'left', height: 22 });
+  r++;
+
+  // A-B: ラベル（結合）
+  sh.getRange(r, 1, 1, 2).merge();
+  _setCell(sh, r, 1, '新規顧客数', { bold: true, bg: '#FFF2CC' });
+  // C: 新規顧客数（黄色・手入力）
+  _setCell(sh, r, 3, 0, { bold: true, color: '#C00000', bg: COLORS.INPUT_BG, align: 'center', format: '0' });
+  // D: 単価（黄色）
+  _setCell(sh, r, 4, 0, { bold: true, color: '#C00000', bg: COLORS.INPUT_BG, align: 'center', format: '#,##0' });
+  // E: 小計 = C × D
+  sh.getRange(r, 5).setFormula('=C' + r + '*D' + r);
+  _setCell(sh, r, 5, null, { bold: true, bg: COLORS.AUTO_BG, align: 'right', format: '#,##0' });
+  sh.getRange(r, 5).setFormula('=C' + r + '*D' + r);
+  // F: 備考
+  _setCell(sh, r, 6, '初回チケット平均単価', {});
   sh.setRowHeight(r, 22);
-  const newRow = r; r++;
-
-  sh.getRange(r,1,1,3).merge()
-    .setValue('新規顧客　小計').setBackground('#E2EFDA').setFontWeight('bold')
-    .setFontColor('#1F4E79').setHorizontalAlignment('right').setFontSize(11);
-  sh.getRange(r,4).setFormula('=D'+newRow)
-    .setBackground('#E2EFDA').setFontWeight('bold').setFontColor('#1F4E79')
-    .setHorizontalAlignment('right').setNumberFormat('#,##0').setFontSize(11);
-  sh.setRowHeight(r, 24);
-  const newSubRow = r; r++;
-
-  // 合計
+  const newRow = r;
   r++;
-  sh.getRange(r,1,1,3).merge()
-    .setValue('▶ 当月　売上目標（最低見込み）')
-    .setBackground('#1F4E79').setFontColor('#FFFFFF').setFontWeight('bold')
-    .setFontSize(12).setHorizontalAlignment('right');
-  sh.getRange(r,4).setFormula('=D'+existSubRow+'+D'+newSubRow)
-    .setBackground('#1F4E79').setFontColor('#FFFFFF').setFontWeight('bold')
-    .setFontSize(14).setHorizontalAlignment('right').setNumberFormat('#,##0');
-  sh.setRowHeight(r, 34); r++;
 
-  sh.getRange(r,1,1,5).merge()
-    .setValue('※ 都度来院客・アップセル分は含まれません（最低限の見込み額）')
-    .setFontSize(9).setFontColor('#595959').setFontStyle('italic');
-  sh.setRowHeight(r, 16); r++;
+  // 新規小計行
+  sh.getRange(r, 1, 1, 4).merge();
+  _setCell(sh, r, 1, '新規顧客　小計', { bold: true, fontSize: 11, color: '#1F4E79', bg: COLORS.NEW_SUB_BG, align: 'right' });
+  sh.getRange(r, 5).setFormula('=E' + newRow);
+  _setCell(sh, r, 5, null, { bold: true, fontSize: 11, color: '#1F4E79', bg: COLORS.NEW_SUB_BG, align: 'right', format: '#,##0' });
+  sh.getRange(r, 5).setFormula('=E' + newRow);
+  _setCell(sh, r, 6, '', { bg: COLORS.NEW_SUB_BG });
+  sh.setRowHeight(r, 24);
+  const newSubRow = r;
+  r++;
 
-  // サマリー表
+  // ── 合計行 ──
+  r++;
+  sh.getRange(r, 1, 1, 4).merge();
+  _setCell(sh, r, 1, '▶ 当月　売上目標（最低見込み）',
+    { bold: true, fontSize: 12, color: '#FFFFFF', bg: COLORS.TOTAL_BG, align: 'right' });
+  sh.getRange(r, 5).setFormula('=E' + existSubRow + '+E' + newSubRow);
+  _setCell(sh, r, 5, null, { bold: true, fontSize: 14, color: '#FFFFFF', bg: COLORS.TOTAL_BG, align: 'right', format: '#,##0' });
+  sh.getRange(r, 5).setFormula('=E' + existSubRow + '+E' + newSubRow);
+  _setCell(sh, r, 6, '', { bg: COLORS.TOTAL_BG });
+  sh.setRowHeight(r, 34);
+  r++;
+
+  _mergeSet(sh, r, 1, 6, '※ 都度来院客・アップセル分は含まれません（最低限の見込み額）',
+    { fontSize: 9, color: '#595959', italic: true, align: 'left', height: 16 });
+  r++;
+
+  // ── 件数サマリー表 ──
   r += 2;
-  sh.getRange(r,1,1,5).merge()
-    .setValue('■ 件数サマリー（参考）').setFontSize(11).setFontWeight('bold').setFontColor('#1F4E79');
-  sh.setRowHeight(r, 22); r++;
+  _mergeSet(sh, r, 1, 6, '■ 件数サマリー（参考）',
+    { bold: true, fontSize: 11, color: '#1F4E79', align: 'left', height: 22 });
+  r++;
 
-  sh.getRange(r,1,1,5).setValues([['券種','当月更新見込み','要確認（期限超過）','翌月以降','算出不可（都度）']])
-    .setBackground('#1F4E79').setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
-  sh.setRowHeight(r, 20); r++;
+  const smHdr = sh.getRange(r, 1, 1, 6);
+  smHdr.setValues([['券種', '当月更新見込み', '要確認（期限超過）', '翌月以降', '算出不可（都度）', '合計']]);
+  _styleRange(smHdr, { bg: COLORS.HEADER_BG, color: '#FFFFFF', bold: true, align: 'center' });
+  sh.setRowHeight(r, 20);
+  r++;
 
-  for (const ct of couponTypes) {
-    const may  = customers.filter(c => c.type === ct && c.status.includes('当月')).length;
-    const over = customers.filter(c => c.type === ct && c.status.includes('要確認')).length;
-    const fut  = customers.filter(c => c.type === ct && c.status === '翌月以降').length;
-    const noc  = customers.filter(c => c.type === ct && c.status.includes('算出不可')).length;
-    sh.getRange(r,1,1,5).setValues([[ct, may, over, fut, noc]]).setHorizontalAlignment('center');
-    sh.getRange(r,1).setBackground(TYPE_COLORS[ct]).setFontWeight('bold');
-    sh.getRange(r,2).setBackground('#FFC7CE').setFontWeight('bold');
-    sh.setRowHeight(r, 20); r++;
+  for (const ct of types) {
+    const may  = customers.filter(c => c.couponType === ct && c.status.includes('当月')).length;
+    const over = customers.filter(c => c.couponType === ct && c.status.includes('要確認')).length;
+    const fut  = customers.filter(c => c.couponType === ct && c.status === '翌月以降').length;
+    const noc  = customers.filter(c => c.couponType === ct && c.status.includes('算出不可')).length;
+    const row  = sh.getRange(r, 1, 1, 6);
+    row.setValues([[ct, may, over, fut, noc, may + over + fut + noc]]).setHorizontalAlignment('center');
+    sh.getRange(r, 1).setBackground(typeColorMap[ct]).setFontWeight('bold');
+    sh.getRange(r, 2).setBackground(COLORS.URGENT).setFontWeight('bold');
+    sh.setRowHeight(r, 20);
+    r++;
   }
 
-  [22,14,15,14,18].forEach((w,i) => sh.setColumnWidth(i+1, w*7));
+  // ── 入力ガイド ──
+  r += 2;
+  _mergeSet(sh, r, 1, 6, '■ 入力手順',
+    { bold: true, fontSize: 11, color: '#1F4E79', align: 'left', height: 22 });
+  r++;
+
+  const guides = [
+    '① C列「実際の顧客数」（C列 各回数券行）を実績に合わせて入力（初期値は自動算出値）',
+    '② D列「単価」を各回数券の金額に入力　→ E列「小計」が自動計算されます',
+    '③ 新規顧客数（C列 新規顧客行）と初回チケット平均単価（D列）を入力',
+    '④ B列「更新見込み件数」はシステム自動算出の参照値です（変更不要）',
+    '⑤ 売上目標（E列 合計行）に当月の最低見込み売上が自動表示されます',
+  ];
+  for (const g of guides) {
+    _mergeSet(sh, r, 1, 6, g, { fontSize: 10, align: 'left', height: 20 });
+    r++;
+  }
 }
 
 // ============================================================
-//  共通ヘルパー関数（集計・月次レポート両方で使用）
+//  スタイルヘルパー関数
+// ============================================================
+function _setCell(sh, row, col, value, opts) {
+  const c = sh.getRange(row, col);
+  if (value !== null && value !== undefined) c.setValue(value);
+  if (opts.bold)    c.setFontWeight('bold');
+  if (opts.fontSize) c.setFontSize(opts.fontSize);
+  if (opts.color)   c.setFontColor(opts.color);
+  if (opts.italic)  c.setFontStyle('italic');
+  if (opts.bg)      c.setBackground(opts.bg);
+  if (opts.align)   c.setHorizontalAlignment(opts.align);
+  if (opts.format)  c.setNumberFormat(opts.format);
+  if (opts.wrap)    c.setWrap(true);
+  c.setBorder(true, true, true, true, null, null);
+}
+
+function _mergeSet(sh, row, col, span, value, opts) {
+  const range = sh.getRange(row, col, 1, span);
+  range.merge().setValue(value);
+  if (opts.bold)     range.setFontWeight('bold');
+  if (opts.fontSize) range.setFontSize(opts.fontSize);
+  if (opts.color)    range.setFontColor(opts.color);
+  if (opts.italic)   range.setFontStyle('italic');
+  if (opts.bg)       range.setBackground(opts.bg);
+  if (opts.align)    range.setHorizontalAlignment(opts.align === 'center' ? 'center' : opts.align === 'right' ? 'right' : 'left');
+  range.setVerticalAlignment('middle');
+  if (opts.wrap)     range.setWrap(true);
+  if (opts.height)   sh.setRowHeight(row, opts.height);
+  range.setBorder(true, true, true, true, null, null);
+}
+
+function _styleRange(range, opts) {
+  if (opts.bg)    range.setBackground(opts.bg);
+  if (opts.color) range.setFontColor(opts.color);
+  if (opts.bold)  range.setFontWeight('bold');
+  if (opts.align) range.setHorizontalAlignment(opts.align);
+  if (opts.wrap)  range.setWrap(true);
+  range.setBorder(true, true, true, true, null, null);
+}
+
+// ============================================================
+//  共通ヘルパー関数（既存コードより・変更なし）
 // ============================================================
 function _push(list12, list8, list4, type, entry) {
   if (type === '12') list12.push(entry); else if (type === '8') list8.push(entry); else list4.push(entry);
