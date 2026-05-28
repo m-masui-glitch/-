@@ -10,8 +10,8 @@ from datetime import date, timedelta
 # 設定
 # ==============================
 VISIT_CYCLE = 10          # 平均来店周期（日）
-ANALYSIS_MONTH_START = date(2026, 5, 1)
-ANALYSIS_MONTH_END   = date(2026, 5, 31)
+ANALYSIS_MONTH_START = date(2026, 6, 1)
+ANALYSIS_MONTH_END   = date(2026, 6, 30)
 
 # ==============================
 # 保有顧客データ（CSVより抽出）
@@ -272,14 +272,14 @@ def set_cell(ws, row, col, value, font=None, fill_style=None, alignment=None, nu
 # タイトル
 ws1.merge_cells("A1:H1")
 c = ws1["A1"]
-c.value = "2026年5月 回数券更新見込み客リスト（平均来店周期10日ベース）"
+c.value = "2026年6月 回数券更新見込み客リスト（平均来店周期10日ベース）"
 c.font = Font(name="游ゴシック", bold=True, size=14, color="1F4E79")
 c.alignment = CENTER
 ws1.row_dimensions[1].height = 30
 
 ws1.merge_cells("A2:H2")
 c = ws1["A2"]
-c.value = f"抽出基準：更新予定日 = 最終来店日 + 残り回数 × {VISIT_CYCLE}日 ／ 対象月：2026年5月1日〜5月31日"
+c.value = f"抽出基準：更新予定日 = 最終来店日 + 残り回数 × {VISIT_CYCLE}日 ／ 対象月：2026年6月1日〜6月30日"
 c.font = Font(name="游ゴシック", size=9, color="595959")
 c.alignment = LEFT
 
@@ -366,7 +366,7 @@ ws2.column_dimensions["F"].width = 14
 # ---- タイトル ----
 ws2.merge_cells("A1:F1")
 c = ws2["A1"]
-c.value = "売上目標設定シート　／　2026年5月"
+c.value = "売上目標設定シート　／　2026年6月"
 c.font = Font(name="游ゴシック", bold=True, size=16, color="1F4E79")
 c.alignment = CENTER
 ws2.row_dimensions[1].height = 36
@@ -618,7 +618,7 @@ ws3.column_dimensions["H"].width = 18
 
 ws3.merge_cells("A1:H1")
 c = ws3["A1"]
-c.value = "保有顧客　全ステータス一覧"
+c.value = "保有顧客　全ステータス一覧（2026年6月版）"
 c.font = Font(name="游ゴシック", bold=True, size=14, color="1F4E79")
 c.alignment = CENTER
 ws3.row_dimensions[1].height = 28
@@ -660,7 +660,7 @@ for r_i, cust in enumerate(sorted_all, 3):
 # ==============================
 # 保存
 # ==============================
-output_path = "/home/user/-/売上目標設定シート_2026年5月.xlsx"
+output_path = "/home/user/-/売上目標設定シート_2026年6月.xlsx"
 wb.save(output_path)
 print(f"✅ 保存完了: {output_path}")
 
