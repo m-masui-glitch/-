@@ -669,7 +669,7 @@ function _checkExpired(row, r, backgrounds) {
 }
 function _getCurrentTicket(row, r, fontColors, backgrounds) {
   let lastIdx = -1, lastType = null;
-  for (let c = COL_GRP; c + 3 < row.length; c += 7) {
+  for (let c = COL_GRP; c + 3 < row.length; c++) {
     const marker = String(row[c] || '').trim();
     if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break;
     if (marker === '〇') { const type = _normalizeType(row[c+1]); if (type) { lastIdx = c; lastType = type; } }
