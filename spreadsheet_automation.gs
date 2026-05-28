@@ -55,6 +55,9 @@ function onOpen() {
     .addItem('▶ 翌月レポートを今すぐ生成',      'generateNextMonthReport')
     .addItem('⚙ 対象月を手動指定して生成',      'generateReportWithPrompt')
     .addItem('📅 月次自動生成を設定（毎月25日）','setupMonthlyTrigger')
+    .addSeparator()
+    .addItem('📂 レポート出力先を確認・変更',    'showReportSpreadsheetInfo')
+    .addItem('🆕 レポート出力先を新規作成',      'resetReportSpreadsheet')
     .addToUi();
 }
 
@@ -211,6 +214,58 @@ function setupMonthlyTrigger() {
 }
 function scheduledMonthlyRun() { generateNextMonthReport(); }
 
+// ── レポート出力先スプレッドシート管理 ──
+
+const REPORT_SS_KEY = 'REPORT_SPREADSHEET_ID';
+
+// レポート用スプレッドシートを取得（なければ新規作成）
+function _getReportSpreadsheet() {
+  const props = PropertiesService.getScriptProperties();
+  const id    = props.getProperty(REPORT_SS_KEY);
+  if (id) {
+    try { return SpreadsheetApp.openById(id); } catch(e) { /* IDが無効なら再作成 */ }
+  }
+  const sourceName = SpreadsheetApp.getActiveSpreadsheet().getName();
+  const newSS = SpreadsheetApp.create(sourceName + '【月次レポート】');
+  // デフォルトシートを削除
+  const sheets = newSS.getSheets();
+  if (sheets.length > 0) {
+    newSS.insertSheet('_dummy');
+    newSS.deleteSheet(sheets[0]);
+  }
+  props.setProperty(REPORT_SS_KEY, newSS.getId());
+  return newSS;
+}
+
+// 現在の出力先を確認・URLをアラート表示
+function showReportSpreadsheetInfo() {
+  const props = PropertiesService.getScriptProperties();
+  const id    = props.getProperty(REPORT_SS_KEY);
+  const ui    = SpreadsheetApp.getUi();
+  if (!id) {
+    ui.alert('まだレポート出力先が設定されていません。\n「翌月レポートを生成」を実行すると自動で作成されます。');
+    return;
+  }
+  try {
+    const ss  = SpreadsheetApp.openById(id);
+    const url = ss.getUrl();
+    ui.alert('📂 現在のレポート出力先\n\n' + ss.getName() + '\n\n' + url + '\n\n※URLをコピーして共有してください。');
+  } catch(e) {
+    ui.alert('登録済みのIDが無効です。「レポート出力先を新規作成」で再設定してください。');
+  }
+}
+
+// 出力先を新規作成（既存のIDをリセット）
+function resetReportSpreadsheet() {
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.alert('新しいレポート用スプレッドシートを作成します。\n（既存のレポートはそのまま残ります）\n\nよろしいですか？', ui.ButtonSet.OK_CANCEL);
+  if (res !== ui.Button.OK) return;
+  PropertiesService.getScriptProperties().deleteProperty(REPORT_SS_KEY);
+  const ss  = _getReportSpreadsheet();
+  const url = ss.getUrl();
+  ui.alert('✅ 新しいレポート出力先を作成しました。\n\n' + url + '\n\n※このURLを関係者に共有してください。');
+}
+
 // ── コアロジック ──
 function _runMonthlyReport(year, month) {
   const ss  = SpreadsheetApp.getActiveSpreadsheet();
@@ -291,14 +346,20 @@ function _runMonthlyReport(year, month) {
     });
   }
 
-  const monthStr = year + '年' + month + '月';
-  const sheetId  = String(year) + String(month).padStart(2, '0');
+  const monthStr  = year + '年' + month + '月';
+  const sheetId   = String(year) + String(month).padStart(2, '0');
 
-  _createListSheet(ss, customers, monthStr, sheetId);
-  _createSalesSheet(ss, customers, monthStr, sheetId);
+  // 別スプレッドシートに出力
+  const reportSS = _getReportSpreadsheet();
+  _createListSheet(reportSS, customers, monthStr, sheetId);
+  _createSalesSheet(reportSS, customers, monthStr, sheetId);
 
-  ss.setActiveSheet(ss.getSheetByName('更新リスト_' + sheetId));
-  SpreadsheetApp.getUi().alert('✅ ' + monthStr + 'のレポートを生成しました！\n・更新リスト_' + sheetId + '\n・売上目標_' + sheetId);
+  const url = reportSS.getUrl();
+  SpreadsheetApp.getUi().alert(
+    '✅ ' + monthStr + 'のレポートを生成しました！\n\n' +
+    '出力先スプレッドシート：\n' + url + '\n\n' +
+    '※メニュー「レポート出力先を確認・変更」からURLを再確認できます。'
+  );
 }
 
 // ── 更新見込みリストシート ──
