@@ -354,12 +354,19 @@ for section_title, customers in sections:
     row += 1  # セクション間スペース
 
 # ==================== Sheet 2: 売上目標設定シート ====================
+# 列構成:
+#   A: 項目
+#   B: 更新見込み件数（自動算出・参照用）
+#   C: 実際の顧客数（手入力）← 新設
+#   D: 単価（円）【要入力】
+#   E: 小計（円）= C × D
+#   F: 備考
 ws2 = wb.create_sheet("②売上目標設定シート")
 
 ws2.column_dimensions["A"].width = 28
 ws2.column_dimensions["B"].width = 16
-ws2.column_dimensions["C"].width = 14
-ws2.column_dimensions["D"].width = 16
+ws2.column_dimensions["C"].width = 16
+ws2.column_dimensions["D"].width = 14
 ws2.column_dimensions["E"].width = 16
 ws2.column_dimensions["F"].width = 14
 
@@ -373,17 +380,23 @@ ws2.row_dimensions[1].height = 36
 
 ws2.merge_cells("A2:F2")
 c = ws2["A2"]
-c.value = "※ 黄色セルに数字を入力すると自動計算されます"
+c.value = "※ 黄色セルを入力すると自動計算されます　　灰色セル＝自動算出（変更不要）"
 c.font = Font(name="游ゴシック", size=9, color="FF0000", italic=True)
 c.alignment = LEFT
 ws2.row_dimensions[2].height = 18
 
 # ---- 列ヘッダー ----
-col_headers = ["項目", "更新見込み件数\n（変更可）", "回数券単価（円）\n【要入力】", "小計（円）", "備考", ""]
-col_header_fills = [HEADER_FILL]*6
-for i, h in enumerate(col_headers[:5], 1):
+col_headers = [
+    "項目",
+    "更新見込み件数\n（自動算出）",
+    "実際の顧客数\n【手入力】",
+    "単価（円）\n【要入力】",
+    "小計（円）",
+    "備考",
+]
+for i, h in enumerate(col_headers, 1):
     set_cell(ws2, 3, i, h, font=HEADER_FONT, fill_style=HEADER_FILL, alignment=CENTER)
-ws2.row_dimensions[3].height = 36
+ws2.row_dimensions[3].height = 40
 
 # ---- セクション1: 既存顧客 回数券更新見込み ----
 ws2.merge_cells("A4:F4")
@@ -403,40 +416,45 @@ coupon_rows = [
 ]
 
 for label, cnt, row_fill, r in coupon_rows:
-    # 項目名
+    # A: 項目名
     set_cell(ws2, r, 1, label, font=BOLD_FONT, fill_style=row_fill, alignment=LEFT)
-    # 件数（変更可・黄色）
-    c_cnt = ws2.cell(row=r, column=2, value=cnt)
-    c_cnt.font = BOLD_FONT
-    c_cnt.fill = INPUT_FILL
-    c_cnt.alignment = CENTER
-    c_cnt.border = border_thin()
-    c_cnt.number_format = "0"
-    # 単価（入力必須・黄色）
-    c_price = ws2.cell(row=r, column=3, value=0)
+    # B: 更新見込み件数（自動算出・参照用・グレー）
+    c_auto = ws2.cell(row=r, column=2, value=cnt)
+    c_auto.font = BODY_FONT
+    c_auto.fill = CALC_FILL
+    c_auto.alignment = CENTER
+    c_auto.border = border_thin()
+    c_auto.number_format = "0"
+    # C: 実際の顧客数（手入力・黄色）
+    c_manual = ws2.cell(row=r, column=3, value=cnt)   # デフォルトは自動値をセット
+    c_manual.font = Font(name="游ゴシック", bold=True, size=10, color="C00000")
+    c_manual.fill = INPUT_FILL
+    c_manual.alignment = CENTER
+    c_manual.border = border_thin()
+    c_manual.number_format = "0"
+    # D: 単価（入力必須・黄色）
+    c_price = ws2.cell(row=r, column=4, value=0)
     c_price.font = Font(name="游ゴシック", bold=True, size=10, color="C00000")
     c_price.fill = INPUT_FILL
     c_price.alignment = CENTER
     c_price.border = border_thin()
     c_price.number_format = "#,##0"
-    # 小計（自動計算）
-    col_b = get_column_letter(2)
-    col_c = get_column_letter(3)
-    c_sub = ws2.cell(row=r, column=4)
-    c_sub.value = f"={col_b}{r}*{col_c}{r}"
+    # E: 小計（C × D・自動計算）
+    c_sub = ws2.cell(row=r, column=5)
+    c_sub.value = f"=C{r}*D{r}"
     c_sub.font = BOLD_FONT
     c_sub.fill = CALC_FILL
     c_sub.alignment = RIGHT
     c_sub.border = border_thin()
     c_sub.number_format = "#,##0"
-    # 備考
+    # F: 備考
     memo = {"12回券 更新見込み":"12枚綴り","8回券 更新見込み":"8枚綴り",
             "4回券 更新見込み":"4枚綴り","3回券 更新見込み":"3枚綴り"}.get(label,"")
-    set_cell(ws2, r, 5, memo, font=BODY_FONT, alignment=LEFT)
+    set_cell(ws2, r, 6, memo, font=BODY_FONT, alignment=LEFT)
     ws2.row_dimensions[r].height = 22
 
 # 既存小計
-ws2.merge_cells("A9:C9")
+ws2.merge_cells("A9:D9")
 c = ws2["A9"]
 c.value = "既存顧客　小計"
 c.font = Font(name="游ゴシック", bold=True, size=11, color="1F4E79")
@@ -444,15 +462,14 @@ c.fill = fill("DEEAF1")
 c.alignment = RIGHT
 c.border = border_thin()
 
-c_sub9 = ws2.cell(row=9, column=4)
-c_sub9.value = "=D5+D6+D7+D8"
+c_sub9 = ws2.cell(row=9, column=5)
+c_sub9.value = "=E5+E6+E7+E8"
 c_sub9.font = Font(name="游ゴシック", bold=True, size=11, color="1F4E79")
 c_sub9.fill = fill("DEEAF1")
 c_sub9.alignment = RIGHT
 c_sub9.border = border_thin()
 c_sub9.number_format = "#,##0"
-
-ws2.cell(row=9, column=5).border = border_thin()
+ws2.cell(row=9, column=6).border = border_thin()
 ws2.row_dimensions[9].height = 24
 
 # ---- セクション2: 新規顧客 ----
@@ -465,34 +482,38 @@ c.alignment = LEFT
 c.border = border_thin()
 ws2.row_dimensions[10].height = 22
 
-# 新規件数
+# 新規顧客行（B列は「自動算出なし」のためグレーで空白）
+ws2.merge_cells("A11:B11")
 set_cell(ws2, 11, 1, "新規顧客数", font=BOLD_FONT, fill_style=fill("FFF2CC"), alignment=LEFT)
-c_new = ws2.cell(row=11, column=2, value=0)
+ws2.cell(row=11, column=2).fill = fill("FFF2CC")
+# C: 新規顧客数（手入力・黄色）
+c_new = ws2.cell(row=11, column=3, value=0)
 c_new.font = Font(name="游ゴシック", bold=True, size=10, color="C00000")
 c_new.fill = INPUT_FILL
 c_new.alignment = CENTER
 c_new.border = border_thin()
 c_new.number_format = "0"
-
-c_price_new = ws2.cell(row=11, column=3, value=0)
+# D: 単価（黄色）
+c_price_new = ws2.cell(row=11, column=4, value=0)
 c_price_new.font = Font(name="游ゴシック", bold=True, size=10, color="C00000")
 c_price_new.fill = INPUT_FILL
 c_price_new.alignment = CENTER
 c_price_new.border = border_thin()
 c_price_new.number_format = "#,##0"
-
-set_cell(ws2, 11, 4, None, font=BODY_FONT, fill_style=CALC_FILL, alignment=RIGHT)
-ws2.cell(row=11, column=4).value = "=B11*C11"
-ws2.cell(row=11, column=4).number_format = "#,##0"
-ws2.cell(row=11, column=4).font = BOLD_FONT
-ws2.cell(row=11, column=4).fill = CALC_FILL
-ws2.cell(row=11, column=4).border = border_thin()
-
-set_cell(ws2, 11, 5, "初回チケット平均単価", font=BODY_FONT, alignment=LEFT)
+# E: 小計（C × D・自動）
+c_sub11 = ws2.cell(row=11, column=5)
+c_sub11.value = "=C11*D11"
+c_sub11.font = BOLD_FONT
+c_sub11.fill = CALC_FILL
+c_sub11.alignment = RIGHT
+c_sub11.border = border_thin()
+c_sub11.number_format = "#,##0"
+# F: 備考
+set_cell(ws2, 11, 6, "初回チケット平均単価", font=BODY_FONT, alignment=LEFT)
 ws2.row_dimensions[11].height = 22
 
 # 新規小計
-ws2.merge_cells("A12:C12")
+ws2.merge_cells("A12:D12")
 c = ws2["A12"]
 c.value = "新規顧客　小計"
 c.font = Font(name="游ゴシック", bold=True, size=11, color="1F4E79")
@@ -500,20 +521,20 @@ c.fill = fill("E2EFDA")
 c.alignment = RIGHT
 c.border = border_thin()
 
-c_sub12 = ws2.cell(row=12, column=4)
-c_sub12.value = "=D11"
+c_sub12 = ws2.cell(row=12, column=5)
+c_sub12.value = "=E11"
 c_sub12.font = Font(name="游ゴシック", bold=True, size=11, color="1F4E79")
 c_sub12.fill = fill("E2EFDA")
 c_sub12.alignment = RIGHT
 c_sub12.border = border_thin()
 c_sub12.number_format = "#,##0"
-ws2.cell(row=12, column=5).border = border_thin()
+ws2.cell(row=12, column=6).border = border_thin()
 ws2.row_dimensions[12].height = 24
 
 # ---- 合計 ----
 ws2.row_dimensions[13].height = 8  # スペース
 
-ws2.merge_cells("A14:C14")
+ws2.merge_cells("A14:D14")
 c = ws2["A14"]
 c.value = "▶ 当月　売上目標（最低見込み）"
 c.font = TOTAL_FONT
@@ -521,14 +542,14 @@ c.fill = TOTAL_FILL
 c.alignment = RIGHT
 c.border = border_thin()
 
-c_total = ws2.cell(row=14, column=4)
-c_total.value = "=D9+D12"
+c_total = ws2.cell(row=14, column=5)
+c_total.value = "=E9+E12"
 c_total.font = Font(name="游ゴシック", bold=True, size=14, color="FFFFFF")
 c_total.fill = TOTAL_FILL
 c_total.alignment = RIGHT
 c_total.border = border_thin()
 c_total.number_format = "#,##0"
-ws2.cell(row=14, column=5).border = border_thin()
+ws2.cell(row=14, column=6).border = border_thin()
 ws2.row_dimensions[14].height = 32
 
 # 注記
@@ -590,11 +611,11 @@ c.alignment = LEFT
 ws2.row_dimensions[25].height = 22
 
 guides = [
-    "① 各回数券の「単価」（C5〜C8）を入力　→ 既存顧客の小計が自動計算されます",
-    "② 「新規顧客数」（B11）を実績または予測数に変更",
-    "③ 「初回チケット平均単価」（C11）を入力",
-    "④ B5〜B8 の「更新見込み件数」は変更可能（実態に合わせて上書きしてください）",
-    "⑤ 売上目標セル（D14）に当月の最低見込み売上が表示されます",
+    "① C列「実際の顧客数」（C5〜C8）を実績に合わせて入力（初期値はシステム算出値を自動セット）",
+    "② D列「単価」（D5〜D8）を各回数券の金額に入力　→ E列「小計」が自動計算されます",
+    "③ 新規顧客数（C11）と初回チケット平均単価（D11）を入力",
+    "④ B列「更新見込み件数」はシステムが自動算出した参照値です（変更不要）",
+    "⑤ 売上目標セル（E14）に当月の最低見込み売上が表示されます",
 ]
 for g_i, g in enumerate(guides, 26):
     ws2.merge_cells(f"A{g_i}:F{g_i}")
