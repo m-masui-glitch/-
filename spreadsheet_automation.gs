@@ -478,11 +478,13 @@ function _createSalesSheet(ss, customers, monthStr, sheetId) {
 
   const ticketStartRow = r;
   const typeRows = {};
+  const PRICES = { '12回券': 80780, '8回券': 55440, '4回券': 28510, '3回券': 19250 };
 
   for (const ct of types) {
     typeRows[ct] = r;
-    const cnt = autoCnt[ct];
-    const bg  = typeColorMap[ct];
+    const cnt   = autoCnt[ct];
+    const bg    = typeColorMap[ct];
+    const price = PRICES[ct];
 
     // A: 項目名
     _setCell(sh, r, 1, ct + ' 更新見込み', { bold: true, bg });
@@ -490,8 +492,8 @@ function _createSalesSheet(ss, customers, monthStr, sheetId) {
     _setCell(sh, r, 2, cnt, { bg: COLORS.AUTO_BG, align: 'center', format: '0' });
     // C: 実際の顧客数（黄色・手入力、初期値は自動算出値）
     _setCell(sh, r, 3, cnt, { bold: true, color: '#C00000', bg: COLORS.INPUT_BG, align: 'center', format: '0' });
-    // D: 単価（黄色・要入力）
-    _setCell(sh, r, 4, 0,   { bold: true, color: '#C00000', bg: COLORS.INPUT_BG, align: 'center', format: '#,##0' });
+    // D: 単価（固定値・変更可）
+    _setCell(sh, r, 4, price, { bold: true, bg: COLORS.INPUT_BG, align: 'center', format: '#,##0' });
     // E: 小計 = C × D（グレー・自動）
     sh.getRange(r, 5).setFormula('=C' + r + '*D' + r);
     _setCell(sh, r, 5, null, { bold: true, bg: COLORS.AUTO_BG, align: 'right', format: '#,##0' });
@@ -526,8 +528,8 @@ function _createSalesSheet(ss, customers, monthStr, sheetId) {
   _setCell(sh, r, 1, '新規顧客数', { bold: true, bg: '#FFF2CC' });
   // C: 新規顧客数（黄色・手入力）
   _setCell(sh, r, 3, 0, { bold: true, color: '#C00000', bg: COLORS.INPUT_BG, align: 'center', format: '0' });
-  // D: 単価（黄色）
-  _setCell(sh, r, 4, 0, { bold: true, color: '#C00000', bg: COLORS.INPUT_BG, align: 'center', format: '#,##0' });
+  // D: 単価（固定値・変更可）
+  _setCell(sh, r, 4, 3000, { bold: true, bg: COLORS.INPUT_BG, align: 'center', format: '#,##0' });
   // E: 小計 = C × D
   sh.getRange(r, 5).setFormula('=C' + r + '*D' + r);
   _setCell(sh, r, 5, null, { bold: true, bg: COLORS.AUTO_BG, align: 'right', format: '#,##0' });
