@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ハンティング実戦チェックリスト</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+    background: #1a1a2e;
+    color: #333;
+    overflow: hidden;
+  }
+
+  .slide-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+
+  .slide {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0; left: 0;
+    display: none;
+    flex-direction: column;
+    padding: 48px 60px;
+    background: #fff;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  .slide.active {
+    display: flex;
+    opacity: 1;
+  }
+
+  /* ===== SLIDE 1: Title ===== */
+  .slide-title {
+    background: linear-gradient(135deg, #0f3460 0%, #16213e 60%, #0d7377 100%);
+    color: #fff;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 24px;
+  }
+
+  .slide-title .badge {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 50px;
+    padding: 8px 24px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: #a8d8ea;
+  }
+
+  .slide-title h1 {
+    font-size: 38px;
+    font-weight: 900;
+    line-height: 1.3;
+    color: #fff;
+  }
+
+  .slide-title h1 span {
+    color: #f9c74f;
+  }
+
+  .slide-title .subtitle {
+    font-size: 16px;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.8;
+  }
+
+  .slide-title .accent-line {
+    width: 80px;
+    height: 4px;
+    background: linear-gradient(90deg, #f9c74f, #f8961e);
+    border-radius: 2px;
+    margin: 0 auto;
+  }
+
+  /* ===== Common header ===== */
+  .slide-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .slide-number {
+    background: #0f3460;
+    color: #f9c74f;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 4px 12px;
+    border-radius: 4px;
+  }
+
+  .slide-category {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: #888;
+    text-transform: uppercase;
+  }
+
+  .slide-body h2 {
+    font-size: 28px;
+    font-weight: 900;
+    color: #0f3460;
+    line-height: 1.3;
+    margin-bottom: 8px;
+  }
+
+  .slide-body h2 .highlight {
+    color: #e63946;
+  }
+
+  .slide-body .description {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 28px;
+    line-height: 1.6;
+  }
+
+  /* ===== Checklist ===== */
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1;
+  }
+
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 16px 20px;
+    border-left: 4px solid #dee2e6;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+
+  .check-item:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+
+  .check-item.checked {
+    background: #f0fdf4;
+    border-left-color: #22c55e;
+  }
+
+  .check-item.checked .check-label {
+    color: #555;
+    text-decoration: line-through;
+    text-decoration-color: #22c55e;
+  }
+
+  .check-box {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #adb5bd;
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    transition: all 0.2s;
+  }
+
+  .check-item.checked .check-box {
+    background: #22c55e;
+    border-color: #22c55e;
+  }
+
+  .check-box::after {
+    content: '';
+    width: 6px;
+    height: 10px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg) translateY(-1px);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .check-item.checked .check-box::after {
+    opacity: 1;
+  }
+
+  .check-content {
+    flex: 1;
+  }
+
+  .check-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 4px;
+    line-height: 1.4;
+  }
+
+  .check-detail {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.6;
+  }
+
+  /* ===== Color variants per slide ===== */
+  .slide-prep .check-item { border-left-color: #dee2e6; }
+  .slide-prep .check-item.checked { border-left-color: #22c55e; }
+  .slide-prep .slide-body h2 .highlight { color: #0d7377; }
+  .slide-prep .slide-number { background: #0d7377; }
+
+  .slide-observe .check-item { border-left-color: #dee2e6; }
+  .slide-observe .check-item.checked { border-left-color: #22c55e; }
+  .slide-observe .slide-body h2 .highlight { color: #e63946; }
+  .slide-observe .slide-number { background: #e63946; }
+
+  .slide-approach .check-item { border-left-color: #dee2e6; }
+  .slide-approach .check-item.checked { border-left-color: #22c55e; }
+  .slide-approach .slide-body h2 .highlight { color: #f8961e; }
+  .slide-approach .slide-number { background: #f8961e; }
+
+  .slide-closing .check-item { border-left-color: #dee2e6; }
+  .slide-closing .check-item.checked { border-left-color: #22c55e; }
+  .slide-closing .slide-body h2 .highlight { color: #7209b7; }
+  .slide-closing .slide-number { background: #7209b7; }
+
+  .slide-review .check-item { border-left-color: #dee2e6; }
+  .slide-review .check-item.checked { border-left-color: #22c55e; }
+  .slide-review .slide-body h2 .highlight { color: #0f3460; }
+  .slide-review .slide-number { background: #0f3460; }
+
+  /* ===== Navigation ===== */
+  .nav-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: rgba(15,52,96,0.95);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 40px;
+    z-index: 100;
+  }
+
+  .nav-dots {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .nav-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .nav-dot.active {
+    background: #f9c74f;
+    width: 24px;
+    border-radius: 4px;
+  }
+
+  .nav-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    padding: 10px 28px;
+    border-radius: 50px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+
+  .nav-btn:hover {
+    background: rgba(249,199,79,0.25);
+    border-color: #f9c74f;
+    color: #f9c74f;
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .nav-center {
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 1px;
+  }
+
+  /* ===== Progress bar ===== */
+  .progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f9c74f, #f8961e);
+    transition: width 0.4s ease;
+    z-index: 200;
+  }
+
+  /* ===== 2-column grid for slide 3 ===== */
+  .checklist-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    flex: 1;
+  }
+
+  .checklist-grid .check-item {
+    margin: 0;
+  }
+
+  /* Reset check button */
+  .reset-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.5);
+    padding: 8px 16px;
+    border-radius: 50px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+  .reset-btn:hover {
+    border-color: #e63946;
+    color: #e63946;
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progressBar"></div>
+
+<div class="slide-container">
+
+  <!-- SLIDE 1: Title -->
+  <div class="slide slide-title active" id="slide-0">
+    <div class="badge">HUNTING SUCCESS GUIDE</div>
+    <div class="accent-line"></div>
+    <h1>決定率を最大化する！<br>店頭ハンティング<span>実戦チェックリスト</span></h1>
+    <p class="subtitle">5月・6月の成功事例から導き出された必勝ルーティン<br>ハンティング前の確認・実施中の振り返りにご活用ください</p>
+    <div style="display:flex; gap:40px; justify-content:center; margin-top:16px;">
+      <div style="text-align:center;">
+        <div style="font-size:32px; font-weight:900; color:#f9c74f;">5</div>
+        <div style="font-size:12px; color:rgba(255,255,255,0.5); letter-spacing:1px;">STAGES</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:32px; font-weight:900; color:#f9c74f;">18</div>
+        <div style="font-size:12px; color:rgba(255,255,255,0.5); letter-spacing:1px;">CHECK ITEMS</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 2: 事前準備 -->
+  <div class="slide slide-prep" id="slide-1">
+    <div class="slide-header">
+      <span class="slide-number">STEP 01</span>
+      <span class="slide-category">Pre-Hunting Setup</span>
+    </div>
+    <div class="slide-body">
+      <h2>【事前準備】「入りやすさ」と<span class="highlight">「意識」</span>のセットアップ</h2>
+      <p class="description">お客様が足を止めるための環境づくりと、スタッフの心構えを確認します。</p>
+      <div class="checklist">
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">店内の視認性を確保する</div>
+            <div class="check-detail">レースのカーテンを開け、中の様子（安心感）が外から見えるようにしているか。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">「常に見られている」意識を持つ</div>
+            <div class="check-detail">事務作業中やポスティング準備中も、外からの視線を意識し、いつでも会釈できる態勢か。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">役割分担を明確にする</div>
+            <div class="check-detail">ペアで実施する場合、誰がどのコース（500円体験・20分体験など）を案内するか事前に決めているか。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 3: 観察 -->
+  <div class="slide slide-observe" id="slide-2">
+    <div class="slide-header">
+      <span class="slide-number">STEP 02</span>
+      <span class="slide-category">Target Observation</span>
+    </div>
+    <div class="slide-body">
+      <h2>【観察】<span class="highlight">「0.5秒の変化」</span>を捉えるターゲット選定</h2>
+      <p class="description">成功事例に基づく、声をかけるべき「高確率なターゲット」のサインです。</p>
+      <div class="checklist-grid">
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">「二度見」や「往復視線」</div>
+            <div class="check-detail">看板とスタッフを交互に見た人は「判断中」のサイン。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">「0.5秒の減速」</div>
+            <div class="check-detail">歩く速度がわずかに落ちた瞬間、情報処理のために足が止まりかけている。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">「1〜2度の軸のズレ」</div>
+            <div class="check-detail">体や首がわずかでも店舗側を向いたら、興味がある証拠。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">「不調の動作」</div>
+            <div class="check-detail">腰を押さえる・肩を回す・信号待ちで体をさする等の動きを見逃さない。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 4: 声掛け -->
+  <div class="slide slide-approach" id="slide-3">
+    <div class="slide-header">
+      <span class="slide-number">STEP 03</span>
+      <span class="slide-category">First Contact</span>
+    </div>
+    <div class="slide-body">
+      <h2>【声掛け】安心感を与え、<span class="highlight">ニーズを引き出す</span></h2>
+      <p class="description">ただチラシを渡すのではなく、「会話を成立させる」ためのポイントです。</p>
+      <div class="checklist">
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">「自分事化」させるフレーズを使う</div>
+            <div class="check-detail">「腰痛・肩こりありませんか？」と具体的に問いかけ、相手に「あ、私だ」と思わせる。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">「沈黙」と「聞き手」に徹する</div>
+            <div class="check-detail">挨拶のあと数秒待ち、相手が話し出したら不調や悩みを徹底して聞く。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">パーソナルな会話で警戒心を解く</div>
+            <div class="check-detail">ペット（犬）に触れたり、趣味（手芸など）の話を聞いたりして、信頼関係を構築する。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 5: クロージング -->
+  <div class="slide slide-closing" id="slide-4">
+    <div class="slide-header">
+      <span class="slide-number">STEP 04</span>
+      <span class="slide-category">Closing</span>
+    </div>
+    <div class="slide-body">
+      <h2>【クロージング】<span class="highlight">「今予約する理由」</span>を作る</h2>
+      <p class="description">「また今度」を「今から」に変えるための決定打。熱量が高いうちに動かします。</p>
+      <div class="checklist">
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">「今すぐ」のご案内を提示する</div>
+            <div class="check-detail">「今すぐご案内できます」と伝え、熱量が高いまま店内に誘導する。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">具体的な「2択」で予約を確定させる</div>
+            <div class="check-detail">「11:15からと15:00から、どちらがご都合良いですか？」と時間まで決める。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">限定感で背中を押す</div>
+            <div class="check-detail">「予約が埋まりやすいので今取りましょう」「残りわずか」と伝え、決断を後押しする。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">「半年ルール」を活用する</div>
+            <div class="check-detail">過去来店者でも、半年以上空いていれば新規価格でご案内できることを伝えているか。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 6: 事後分析 -->
+  <div class="slide slide-review" id="slide-5">
+    <div class="slide-header">
+      <span class="slide-number">STEP 05</span>
+      <span class="slide-category">Post Analysis</span>
+    </div>
+    <div class="slide-body">
+      <h2>【事後分析】<span class="highlight">振り返りと再アプローチ</span></h2>
+      <p class="description">次回の成功率を上げるための振り返り。小さな気づきが大きな差を生みます。</p>
+      <div class="checklist">
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">離客理由を分析する</div>
+            <div class="check-detail">「時間に追われている方への対策」など、獲得できなかった理由を具体的に振り返ったか。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">最後までやり遂げたか</div>
+            <div class="check-detail">閉め作業の最後の瞬間まで看板を出し、外に意識を向け続けていたか。</div>
+          </div>
+        </div>
+        <div class="check-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-content">
+            <div class="check-label">成功パターンを記録・共有する</div>
+            <div class="check-detail">うまくいったフレーズや状況をチームで共有し、次回のハンティングに活かしているか。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:20px; padding:16px 20px; background:linear-gradient(135deg,#0f3460,#0d7377); border-radius:12px; color:#fff; text-align:center;">
+      <div style="font-size:13px; color:rgba(255,255,255,0.7); margin-bottom:4px;">全チェック完了後のゴール</div>
+      <div style="font-size:18px; font-weight:900; color:#f9c74f;">「今日も1件、決定を積み上げる！」</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Navigation -->
+<div class="nav-bar">
+  <button class="nav-btn" id="prevBtn" onclick="changeSlide(-1)" disabled>← 前へ</button>
+  <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+    <div class="nav-dots" id="navDots"></div>
+    <div class="nav-center" id="slideCounter">1 / 6</div>
+  </div>
+  <div style="display:flex; gap:12px; align-items:center;">
+    <button class="reset-btn" onclick="resetAll()">リセット</button>
+    <button class="nav-btn" id="nextBtn" onclick="changeSlide(1)">次へ →</button>
+  </div>
+</div>
+
+<script>
+  const totalSlides = 6;
+  let current = 0;
+
+  function init() {
+    const dots = document.getElementById('navDots');
+    for (let i = 0; i < totalSlides; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+      dot.onclick = () => goToSlide(i);
+      dots.appendChild(dot);
+    }
+    updateNav();
+  }
+
+  function goToSlide(n) {
+    document.getElementById('slide-' + current).classList.remove('active');
+    current = n;
+    document.getElementById('slide-' + current).classList.add('active');
+    updateNav();
+  }
+
+  function changeSlide(dir) {
+    goToSlide(current + dir);
+  }
+
+  function updateNav() {
+    document.getElementById('prevBtn').disabled = current === 0;
+    document.getElementById('nextBtn').disabled = current === totalSlides - 1;
+    document.getElementById('slideCounter').textContent = (current + 1) + ' / ' + totalSlides;
+
+    const dots = document.querySelectorAll('.nav-dot');
+    dots.forEach((d, i) => d.classList.toggle('active', i === current));
+
+    const progress = ((current + 1) / totalSlides) * 100;
+    document.getElementById('progressBar').style.width = progress + '%';
+  }
+
+  function toggleCheck(el) {
+    el.classList.toggle('checked');
+  }
+
+  function resetAll() {
+    document.querySelectorAll('.check-item.checked').forEach(el => el.classList.remove('checked'));
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { if (current < totalSlides - 1) changeSlide(1); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { if (current > 0) changeSlide(-1); }
+  });
+
+  init();
+</script>
+</body>
+</html>
