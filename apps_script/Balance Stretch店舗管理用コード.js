@@ -110,7 +110,6 @@ function _calcExpiry(row, fontColors, r) {
 
   for (let c = COL_GRP; c + 3 < row.length; c += 7) {
     const marker = String(row[c] || '').trim();
-    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break;
     if (marker === '〇') {
       const type = _normalizeType(row[c + 1]);
       if (type) {
@@ -144,8 +143,6 @@ function _calcLastVisit(row, fontColors, r) {
 
   // 7列グループのセッションスロット（col+3〜col+6）
   for (let c = COL_GRP; c + 3 < row.length; c += 7) {
-    const marker = String(row[c] || '').trim();
-    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break;
     for (let s = 3; s <= 6; s++) {
       const col = c + s;
       if (col < row.length) check(row[col], col);
@@ -336,7 +333,6 @@ function _getCurrentTicket(row, r, fontColors, backgrounds) {
 
   for (let c = COL_GRP; c + 3 < row.length; c += 7) {
     const marker = String(row[c] || '').trim();
-    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break;
     if (marker === '〇') {
       const type = _normalizeType(row[c + 1]);
       if (type) { lastIdx = c; lastType = type; }
