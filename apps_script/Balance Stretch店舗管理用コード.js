@@ -68,12 +68,11 @@ function _updateDatesInSheet(src) {
     const expiry = _calcExpiry(row, fontColors, r);
     if (expiry) {
       expiryVals.push([expiry]);
-      // 有効期限1ヶ月超過→赤 / 残り30日以内→薄赤
-      const overThreshold = new Date(expiry.getFullYear(), expiry.getMonth() + 1, expiry.getDate());
+      // 残り7日以内→赤 / 残り8〜30日→薄赤 / 超過・31日以上→色なし
       const daysLeft = (expiry - today) / 86400000;
       let expiryBg = null;
-      if (today > overThreshold)  expiryBg = '#ea4335'; // 1ヶ月超過：赤
-      else if (daysLeft <= 30)    expiryBg = '#f4cccc'; // 30日以内：薄赤
+      if (daysLeft >= 0 && daysLeft <= 7)        expiryBg = '#ea4335'; // 7日以内：赤
+      else if (daysLeft > 7 && daysLeft <= 30)   expiryBg = '#f4cccc'; // 8〜30日：薄赤
       expiryBgs.push([expiryBg]);
     } else {
       expiryVals.push([row[COL_EXPIRY] !== undefined ? row[COL_EXPIRY] : '']);
