@@ -117,10 +117,10 @@ function _calcExpiry(row, fontColors, r) {
     }
   }
 
-  if (lastPurchaseDate) return _monthEnd(lastPurchaseDate, 6);
+  if (lastPurchaseDate) return _expiryDate(lastPurchaseDate, 6);
 
   const firstVisit = _toDate(row[COL_FIRST_VISIT_3K]);
-  if (firstVisit) return _monthEnd(firstVisit, 3);
+  if (firstVisit) return _expiryDate(firstVisit, 3);
 
   return null;
 }
@@ -152,10 +152,9 @@ function _calcLastVisit(row, fontColors, r) {
   return latest;
 }
 
-// N ヶ月後の月末日（例: 6月1日 + 3 → 8月31日、6月1日 + 6 → 11月30日）
-// new Date(y, m, 0) は月 m の前月末日を返す
-function _monthEnd(date, months) {
-  return new Date(date.getFullYear(), date.getMonth() + months, 0);
+// 購入日 + N ヶ月 - 1日（例: 1月10日 + 6 → 7月9日、3月7日 + 6 → 9月6日）
+function _expiryDate(date, months) {
+  return new Date(date.getFullYear(), date.getMonth() + months, date.getDate() - 1);
 }
 
 // 値をDateオブジェクトに変換
