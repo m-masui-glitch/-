@@ -351,7 +351,6 @@ function _getCurrentTicket(row, r, fontColors, backgrounds) {
   let used = 0;
   for (let g = 0; g < groupsNeeded; g++) {
     const startCol = lastIdx + g * 7;
-    if (startCol >= row.length) break;
     if (g > 0 && String(row[startCol] || '').trim() === '〇') break;
     for (let s = 3; s <= 6; s++) {
       const col = startCol + s;
