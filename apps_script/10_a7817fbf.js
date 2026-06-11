@@ -166,13 +166,12 @@ function _toDate(val) {
   }
   const s = String(val).trim();
   if (!s) return null;
-  const d = new Date(s);
-  if (!isNaN(d.getTime())) return d;
-  const m = s.match(/(\d{4})[年\/\-](\d{1,2})[月\/\-](\d{1,2})/);
-  if (m) {
-    const d2 = new Date(+m[1], +m[2] - 1, +m[3]);
-    return isNaN(d2.getTime()) ? null : d2;
-  }
+  // 年付きフォーマット（2026/4/8, 2026-04-08, 2026年4月8日）
+  const full = s.match(/(\d{4})[年\/\-](\d{1,2})[月\/\-](\d{1,2})/);
+  if (full) return new Date(+full[1], +full[2] - 1, +full[3]);
+  // 月/日 または 月月日日（年なし）→ 当年を補完
+  const md = s.match(/^(\d{1,2})[\/月](\d{1,2})日?$/);
+  if (md) return new Date(new Date().getFullYear(), +md[1] - 1, +md[2]);
   return null;
 }
 
