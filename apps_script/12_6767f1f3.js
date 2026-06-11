@@ -12,17 +12,169 @@ const SOURCE_SHEET_NAME  = '顧客管理';  // ← シートのタブ名が違�
 const SUMMARY_SHEET_NAME = '集計';
 
 // 列番号（0始まり：A=0, B=1, C=2...）　ない列は -1 に設定
-const COL_CUSTOMER_ID = 1;   // 顧客番号（ない場合は -1）
-const COL_NAME        = 4;   // 氏名
-const COL_GENDER      = -1;  // 性別（ある場合は列番号を設定）
-const COL_AGE         = -1;  // 年代（ある場合は列番号を設定）
-const COL_CYCLE       = 3;   // 周期
-const COL_EXPIRY      = 5;   // 有効期限
-const COL_LAST_VISIT  = 6;   // 最終来店日
-const COL_T           = 12;  // 更新列（分類に使用・表には出力しない）
-const COL_3K          = 13;  // 3回券セッション開始列（1/3）
-const COL_GRP         = 16;  // 最初の7列グループ開始列
+const COL_CUSTOMER_ID    = 1;   // B列：顧客番号
+const COL_NAME           = 4;   // E列：氏名
+const COL_GENDER         = -1;
+const COL_AGE            = -1;
+const COL_CYCLE          = 3;   // D列：周期
+const COL_EXPIRY         = 5;   // F列：有効期限（自動入力）
+const COL_LAST_VISIT     = 6;   // G列：最終来店日（自動入力）
+const COL_FIRST_VISIT_3K = 11;  // L列：初回来店日（3回券の有効期限起算日）
+const COL_T              = 12;  // M列：更新列（分類用・表には出力しない）
+const COL_3K             = 13;  // N列：3回券セッション開始
+const COL_GRP            = 16;  // Q列：7列グループ開始
 // ================
+
+// ===== F・G列の自動更新 =====
+
+function updateDates() {
+  const ss  = SpreadsheetApp.getActiveSpreadsheet();
+  const src = ss.getSheetByName(SOURCE_SHEET_NAME);
+  if (!src) {
+    SpreadsheetApp.getUi().alert('「' + SOURCE_SHEET_NAME + '」シートが見つかりません。');
+    return;
+  }
+  _updateDatesInSheet(src);
+  SpreadsheetApp.getUi().alert('F列（有効期限）・G列（最終来店日）を更新しました。');
+}
+
+function _updateDatesInSheet(src) {
+  const range      = src.getDataRange();
+  const numRows    = range.getNumRows();
+  const data       = range.getValues();
+  const fontColors = range.getFontColors();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const expiryVals    = [];
+  const expiryBgs     = [];
+  const lastVisitVals = [];
+  const lastVisitBgs  = [];
+
+  for (let r = 0; r < numRows; r++) {
+    const row  = data[r];
+    const name = String(row[COL_NAME] || '').trim();
+
+    if (!name || _isLabelRow(name)) {
+      expiryVals.push([row[COL_EXPIRY] !== undefined ? row[COL_EXPIRY] : '']);
+      expiryBgs.push([null]);
+      lastVisitVals.push([row[COL_LAST_VISIT] !== undefined ? row[COL_LAST_VISIT] : '']);
+      lastVisitBgs.push([null]);
+      continue;
+    }
+
+    // F列：有効期限を計算
+    const expiry = _calcExpiry(row, fontColors, r);
+    if (expiry) {
+      expiryVals.push([expiry]);
+      // 有効期限から1ヶ月超えたら赤
+      const threshold = new Date(expiry.getFullYear(), expiry.getMonth() + 1, expiry.getDate());
+      expiryBgs.push([today > threshold ? '#ea4335' : null]);
+    } else {
+      expiryVals.push([row[COL_EXPIRY] !== undefined ? row[COL_EXPIRY] : '']);
+      expiryBgs.push([null]);
+    }
+
+    // G列：最終来店日（黒文字の最新日付）
+    const lastVisit = _calcLastVisit(row, fontColors, r);
+    if (lastVisit) {
+      lastVisitVals.push([lastVisit]);
+      // 1ヶ月来店なしは黄色
+      const oneMonthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+      lastVisitBgs.push([lastVisit < oneMonthAgo ? '#fff2cc' : null]);
+    } else {
+      lastVisitVals.push([row[COL_LAST_VISIT] !== undefined ? row[COL_LAST_VISIT] : '']);
+      lastVisitBgs.push([null]);
+    }
+  }
+
+  const fRange = src.getRange(1, COL_EXPIRY + 1, numRows, 1);
+  const gRange = src.getRange(1, COL_LAST_VISIT + 1, numRows, 1);
+  fRange.setValues(expiryVals);
+  fRange.setBackgrounds(expiryBgs);
+  fRange.setNumberFormat('yyyy/mm/dd');
+  gRange.setValues(lastVisitVals);
+  gRange.setBackgrounds(lastVisitBgs);
+  gRange.setNumberFormat('yyyy/mm/dd');
+}
+
+// 有効期限を計算
+// - 4/8/12回券あり → 最新〇の購入日（col+2）+ 6ヶ月の月末
+// - 3回券のみ     → L列（初回日）+ 3ヶ月の月末
+function _calcExpiry(row, fontColors, r) {
+  let lastPurchaseDate = null;
+
+  for (let c = COL_GRP; c + 3 < row.length; c += 7) {
+    const marker = String(row[c] || '').trim();
+    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break;
+    if (marker === '〇') {
+      const type = _normalizeType(row[c + 1]);
+      if (type) {
+        const d = _toDate(row[c + 2]);
+        if (d) lastPurchaseDate = d;
+      }
+    }
+  }
+
+  if (lastPurchaseDate) return _monthEnd(lastPurchaseDate, 6);
+
+  const firstVisit = _toDate(row[COL_FIRST_VISIT_3K]);
+  if (firstVisit) return _monthEnd(firstVisit, 3);
+
+  return null;
+}
+
+// 最終来店日を計算（黒文字の日付の中で最新）
+function _calcLastVisit(row, fontColors, r) {
+  let latest = null;
+
+  const check = (val, c) => {
+    if (_isSessionDate(val) && _isBlackText(_fc(fontColors, r, c))) {
+      const d = _toDate(val);
+      if (d && (!latest || d > latest)) latest = d;
+    }
+  };
+
+  // 3回券エリア
+  for (let c = COL_3K; c <= COL_3K + 2 && c < row.length; c++) check(row[c], c);
+
+  // 7列グループのセッションスロット（col+3〜col+6）
+  for (let c = COL_GRP; c + 3 < row.length; c += 7) {
+    const marker = String(row[c] || '').trim();
+    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break;
+    for (let s = 3; s <= 6; s++) {
+      const col = c + s;
+      if (col < row.length) check(row[col], col);
+    }
+  }
+
+  return latest;
+}
+
+// N ヶ月後の月末日（例: 6月1日 + 3 → 8月31日、6月1日 + 6 → 11月30日）
+// new Date(y, m, 0) は月 m の前月末日を返す
+function _monthEnd(date, months) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 0);
+}
+
+// 値をDateオブジェクトに変換
+function _toDate(val) {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  const s = String(val).trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  const m = s.match(/(\d{4})[年\/\-](\d{1,2})[月\/\-](\d{1,2})/);
+  if (m) {
+    const d2 = new Date(+m[1], +m[2] - 1, +m[3]);
+    return isNaN(d2.getTime()) ? null : d2;
+  }
+  return null;
+}
+
+// ===== 集計表の更新 =====
 
 function updateCouponSummary() {
   const ss  = SpreadsheetApp.getActiveSpreadsheet();
@@ -34,16 +186,17 @@ function updateCouponSummary() {
     return;
   }
 
+  // F・G列を先に自動更新してから集計
+  _updateDatesInSheet(src);
+
+  // 更新後のデータを再読み込み
   const range       = src.getDataRange();
   const data        = range.getValues();
   const fontColors  = range.getFontColors();
   const backgrounds = range.getBackgrounds();
 
-  // 保有顧客（T=〇 or △）
   const act12 = [], act8 = [], act4 = [], act3k = [];
-  // 離客（T=×）
   const chu12 = [], chu8 = [], chu4 = [], chu3k = [];
-  // 期限切れ（有効期限なし or 赤セル）
   const expired = [];
 
   for (let r = 0; r < data.length; r++) {
@@ -87,12 +240,10 @@ function updateCouponSummary() {
       else                 act3k.push(entry);
 
     } else {
-      // チケット未購入：期限切れの場合のみ記録
       if (isExpired) expired.push([...base, '初回のみ']);
     }
   }
 
-  // ===== 集計シートへ書き出し =====
   let dst = ss.getSheetByName(SUMMARY_SHEET_NAME);
   if (!dst) dst = ss.insertSheet(SUMMARY_SHEET_NAME);
   dst.clearContents();
@@ -101,7 +252,6 @@ function updateCouponSummary() {
   const nAct = act12.length + act8.length + act4.length + act3k.length;
   const nChu = chu12.length + chu8.length + chu4.length + chu3k.length;
 
-  // ── 保有顧客 ──
   out.push(['▼ 保有顧客（' + nAct + '名）']);
   out.push([]);
   _appendSection(out, '12回券 購入者', act12, _buyerHeader('12'));
@@ -110,7 +260,6 @@ function updateCouponSummary() {
   _appendSection(out, '3回券 購入者',  act3k, _only3kHeader());
   out.push([]);
 
-  // ── 離客 ──
   out.push(['▼ 離客（' + nChu + '名）']);
   out.push([]);
   _appendSection(out, '12回券（離客）', chu12, _buyerHeader('12'));
@@ -119,12 +268,10 @@ function updateCouponSummary() {
   _appendSection(out, '3回券（離客）',  chu3k, _only3kHeader());
   out.push([]);
 
-  // ── 期限切れ（最下部）──
   out.push(['▼ 有効期限なし・期限切れ（' + expired.length + '名）']);
   out.push(_expiredHeader());
   expired.forEach(r => out.push(r));
 
-  // シートに書き込み
   const maxCols = out.reduce((m, r) => Math.max(m, r.length), 0);
   if (maxCols > 0) {
     const padded = out.map(r => {
@@ -165,23 +312,28 @@ function _checkExpired(row, r, backgrounds) {
   if (COL_EXPIRY < 0) return false;
   const val = row[COL_EXPIRY];
   if (!val || String(val).trim() === '') return true;
-  return _isRed(_bg(backgrounds, r, COL_EXPIRY));
+  if (_isRed(_bg(backgrounds, r, COL_EXPIRY))) return true;
+  // 有効期限日が今日より前なら期限切れ
+  const d = _toDate(val);
+  if (d) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return d < today;
+  }
+  return false;
 }
 
 // 現在のチケット（最新購入分）を返す
 // ─ 7列グループ構造: [〇/●マーカー][回数券種別][購入日][s1][s2][s3][s4]
-// ─ 〇マーカーが新規購入、●マーカーが8/12回券の継続グループ
 // ─ 回数券の種類は〇グループの青3列の真ん中（col+1）から読み取る
 // ─ 途中で種類が変わっても「最後の〇」＝最新購入を採用する
 function _getCurrentTicket(row, r, fontColors, backgrounds) {
   let lastIdx = -1, lastType = null;
 
-  // 左から右へスキャンし、〇マーカーが出るたびに上書き → 最後の〇が最新購入
   for (let c = COL_GRP; c + 3 < row.length; c += 7) {
     const marker = String(row[c] || '').trim();
-    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break; // データ終端
+    if (!marker && !row[c+1] && !row[c+2] && !row[c+3]) break;
     if (marker === '〇') {
-      // 青3列の真ん中（c+1）が回数券種別（4 / 8 / 12）
       const type = _normalizeType(row[c + 1]);
       if (type) { lastIdx = c; lastType = type; }
     }
@@ -189,21 +341,18 @@ function _getCurrentTicket(row, r, fontColors, backgrounds) {
   if (lastIdx === -1) return null;
 
   const typeNum      = parseInt(lastType);
-  // 4回券→1グループ、8回券→2グループ、12回券→3グループ
   const groupsNeeded = Math.ceil(typeNum / 4);
 
-  // 最初のセッションスロットが黄色 → 購入済み・未使用
   const firstSessCol = lastIdx + 3;
   if (!_isSessionDate(row[firstSessCol]) && _isYellow(_bg(backgrounds, r, firstSessCol))) {
     return { type: lastType, used: 0, remaining: typeNum };
   }
 
-  // 黒文字の日付のみ「使用済み」としてカウント（オレンジ=予定は残り扱い）
   let used = 0;
   for (let g = 0; g < groupsNeeded; g++) {
     const startCol = lastIdx + g * 7;
     if (startCol >= row.length) break;
-    if (g > 0 && String(row[startCol] || '').trim() === '〇') break; // 次の新規購入で停止
+    if (g > 0 && String(row[startCol] || '').trim() === '〇') break;
     for (let s = 3; s <= 6; s++) {
       const col = startCol + s;
       if (col < row.length && _isSessionDate(row[col]) && _isBlackText(_fc(fontColors, r, col))) {
@@ -333,6 +482,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('回数券管理')
     .addItem('集計表を今すぐ更新', 'updateCouponSummary')
+    .addItem('F・G列の日付のみ更新する', 'updateDates')
     .addItem('自動更新を設定する（1時間ごと）', 'setupTrigger')
     .addItem('自動更新を止める', 'removeTrigger')
     .addToUi();
