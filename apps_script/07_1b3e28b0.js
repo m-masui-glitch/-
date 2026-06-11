@@ -160,7 +160,10 @@ function _expiryDate(date, months) {
 // 値をDateオブジェクトに変換
 function _toDate(val) {
   if (!val) return null;
-  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+  }
   const s = String(val).trim();
   if (!s) return null;
   const d = new Date(s);
