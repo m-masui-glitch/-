@@ -130,22 +130,29 @@ function _calcExpiry(row, fontColors, r) {
 // 最終来店日を計算（黒文字の日付の中で最新）
 function _calcLastVisit(row, fontColors, r) {
   let latest = null;
+  let currentPurchaseDate = null;
 
-  const check = (val, c) => {
+  const check = (val, c, refDate) => {
     if (_isSessionDate(val) && _isBlackText(_fc(fontColors, r, c))) {
-      const d = _toDate(val);
+      const d = _toDate(val, refDate);
       if (d && (!latest || d > latest)) latest = d;
     }
   };
 
-  // 3回券エリア
-  for (let c = COL_3K; c <= COL_3K + 2 && c < row.length; c++) check(row[c], c);
+  // 3回券エリア（初回来店日を参照日として使用）
+  const ref3k = _toDate(row[COL_FIRST_VISIT_3K]);
+  for (let c = COL_3K; c <= COL_3K + 2 && c < row.length; c++) check(row[c], c, ref3k);
 
-  // 7列グループのセッションスロット（col+3〜col+6）
+  // 7列グループのセッションスロット（〇の購入日を参照日として使用）
   for (let c = COL_GRP; c + 3 < row.length; c += 7) {
+    const marker = String(row[c] || '').trim();
+    if (marker === '〇') {
+      const pd = _toDate(row[c + 2]);
+      if (pd) currentPurchaseDate = pd;
+    }
     for (let s = 3; s <= 6; s++) {
       const col = c + s;
-      if (col < row.length) check(row[col], col);
+      if (col < row.length) check(row[col], col, currentPurchaseDate);
     }
   }
 
@@ -158,7 +165,8 @@ function _expiryDate(date, months) {
 }
 
 // 値をDateオブジェクトに変換
-function _toDate(val) {
+// refDate を渡すと、M/D形式の年を「refDate以降になる年」で補完する
+function _toDate(val, refDate) {
   if (!val) return null;
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return null;
@@ -169,9 +177,17 @@ function _toDate(val) {
   // 年付きフォーマット（2026/4/8, 2026-04-08, 2026年4月8日）
   const full = s.match(/(\d{4})[年\/\-](\d{1,2})[月\/\-](\d{1,2})/);
   if (full) return new Date(+full[1], +full[2] - 1, +full[3]);
-  // 月/日 または 月月日日（年なし）→ 当年を補完
+  // 月/日 または 月月日日（年なし）
   const md = s.match(/^(\d{1,2})[\/月](\d{1,2})日?$/);
-  if (md) return new Date(new Date().getFullYear(), +md[1] - 1, +md[2]);
+  if (md) {
+    const month    = +md[1] - 1;
+    const day      = +md[2];
+    const baseYear = refDate ? refDate.getFullYear() : new Date().getFullYear();
+    const d        = new Date(baseYear, month, day);
+    // 購入日より前になる場合は翌年として補完
+    if (refDate && d < refDate) return new Date(baseYear + 1, month, day);
+    return d;
+  }
   return null;
 }
 
