@@ -85,7 +85,10 @@ function _updateDatesInSheet(src) {
     }
 
     // F列：有効期限を計算
-    const expiry = _calcExpiry(row, fontColors, r);
+    // 最新グループのマーカーが✕/×なら有効期限をクリア
+    const lastMark   = _lastGroupMarker(row);
+    const isCancelled = (lastMark === '✕' || lastMark === '×');
+    const expiry = isCancelled ? null : _calcExpiry(row, fontColors, r);
     if (expiry) {
       expiryVals.push([expiry]);
       // F列色分け：残り日数に応じて3段階
@@ -96,7 +99,7 @@ function _updateDatesInSheet(src) {
       else if (daysLeft <= 60)   expiryBg = '#fffde7'; // 残り31〜60日：クリーム
       expiryBgs.push([expiryBg]);
     } else {
-      expiryVals.push([row[COL_EXPIRY] !== undefined ? row[COL_EXPIRY] : '']);
+      expiryVals.push([isCancelled ? '' : (row[COL_EXPIRY] !== undefined ? row[COL_EXPIRY] : '')]);
       expiryBgs.push([null]);
     }
 
@@ -128,6 +131,16 @@ function _updateDatesInSheet(src) {
   if (numRows >= 2) {
     src.getRange(2, COL_LAST_VISIT + 1).setValue('最終来店日').setNumberFormat('@').setBackground(null);
   }
+}
+
+// グループ列の中で最後に入力されたマーカーを返す
+function _lastGroupMarker(row) {
+  let last = null;
+  for (let c = COL_GRP; c + 3 < row.length; c += 7) {
+    const m = String(row[c] || '').trim();
+    if (m) last = m;
+  }
+  return last;
 }
 
 // 有効期限を計算
