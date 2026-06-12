@@ -122,9 +122,9 @@ function _updateDatesInSheet(src) {
   gRange.setValues(lastVisitVals);
   gRange.setBackgrounds(lastVisitBgs);
   gRange.setNumberFormat('yyyy/mm/dd');
-  // G3 は日付ではなく「最終来店日」ラベルとして固定
-  if (numRows >= 3) {
-    src.getRange(3, COL_LAST_VISIT + 1).setValue('最終来店日').setNumberFormat('@').setBackground(null);
+  // G2 は日付ではなく「最終来店日」ラベルとして固定
+  if (numRows >= 2) {
+    src.getRange(2, COL_LAST_VISIT + 1).setValue('最終来店日').setNumberFormat('@').setBackground(null);
   }
 }
 
@@ -955,20 +955,20 @@ function _styleRange(range, opts) {
 
 // ===== メニュー・トリガー =====
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('回数券管理')
-    .addItem('集計表を今すぐ更新', 'updateCouponSummary')
-    .addItem('F・G列の日付のみ更新する', 'updateDates')
-    .addItem('自動更新を設定する（1時間ごと）', 'setupTrigger')
-    .addItem('自動更新を止める', 'removeTrigger')
-    .addSeparator()
-    .addItem('▶ 翌月レポートを今すぐ生成',       'generateNextMonthReport')
-    .addItem('⚙ 対象月を手動指定して生成',        'generateReportWithPrompt')
-    .addItem('📅 月次自動生成を設定（毎月25日）',  'setupMonthlyTrigger')
-    .addSeparator()
-    .addItem('📂 レポート出力先を確認・変更',      'showReportSpreadsheetInfo')
-    .addItem('🆕 レポート出力先を新規作成',        'resetReportSpreadsheet')
-    .addToUi();
+  const ui = SpreadsheetApp.getUi();
+  const menu = ui.createMenu('回数券管理');
+  menu.addItem('集計表を今すぐ更新', 'updateCouponSummary');
+  menu.addItem('F・G列の日付のみ更新する', 'updateDates');
+  menu.addItem('自動更新を設定する（1時間ごと）', 'setupTrigger');
+  menu.addItem('自動更新を止める', 'removeTrigger');
+  menu.addSeparator();
+  menu.addItem('翌月レポートを今すぐ生成', 'generateNextMonthReport');
+  menu.addItem('対象月を手動指定してレポート生成', 'generateReportWithPrompt');
+  menu.addItem('月次自動生成を設定（毎月25日）', 'setupMonthlyTrigger');
+  menu.addSeparator();
+  menu.addItem('レポート出力先を確認・変更', 'showReportSpreadsheetInfo');
+  menu.addItem('レポート出力先を新規作成', 'resetReportSpreadsheet');
+  menu.addToUi();
 }
 function setupTrigger() {
   removeTrigger();
