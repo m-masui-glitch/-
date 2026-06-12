@@ -111,11 +111,11 @@ function _updateDatesInSheet(src) {
       lastVisitVals.push([lastVisit]);
       const sevenMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 7, today.getDate());
       const sixMonthsAgo   = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
-      const oneMonthAgo    = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+      const thirtyDaysAgo  = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
       let lastVisitBg = null;
-      if      (lastVisit < sevenMonthsAgo) lastVisitBg = null;       // 7ヶ月以上：塗りつぶしなし
-      else if (lastVisit < sixMonthsAgo)   lastVisitBg = '#a9d18e'; // 6〜7ヶ月：黄緑
-      else if (lastVisit < oneMonthAgo)    lastVisitBg = '#fff2cc'; // 30日〜6ヶ月：薄黄
+      if      (lastVisit <= sevenMonthsAgo) lastVisitBg = null;       // 7ヶ月以上：塗りつぶしなし
+      else if (lastVisit <= sixMonthsAgo)   lastVisitBg = '#a9d18e'; // 6ヶ月〜7ヶ月：黄緑
+      else if (lastVisit <= thirtyDaysAgo)  lastVisitBg = '#fff2cc'; // 30日〜6ヶ月：薄黄
       lastVisitBgs.push([lastVisitBg]);
     } else {
       lastVisitVals.push([row[COL_LAST_VISIT] !== undefined ? row[COL_LAST_VISIT] : '']);
