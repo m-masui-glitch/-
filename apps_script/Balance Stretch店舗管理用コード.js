@@ -85,9 +85,11 @@ function _updateDatesInSheet(src) {
     }
 
     // F列：有効期限を計算
-    // 最新グループのマーカーが✕/×なら有効期限をクリア
-    const lastMark   = _lastGroupMarker(row);
-    const isCancelled = (lastMark === '✕' || lastMark === '×');
+    // M列が✕/×かつQ列以降にデータがない場合は有効期限をクリア
+    // M列が✕/×でもQ列以降にデータがあれば通常計算
+    const mVal = String(row[COL_T] || '').trim();
+    const mIsCancelled = (mVal === '✕' || mVal === '×');
+    const isCancelled = mIsCancelled && !_hasAnyGroupData(row);
     const expiry = isCancelled ? null : _calcExpiry(row, fontColors, r);
     if (expiry) {
       expiryVals.push([expiry]);
@@ -107,11 +109,13 @@ function _updateDatesInSheet(src) {
     const lastVisit = _calcLastVisit(row, fontColors, r);
     if (lastVisit) {
       lastVisitVals.push([lastVisit]);
-      const oneMonthAgo  = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
-      const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
+      const sevenMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 7, today.getDate());
+      const sixMonthsAgo   = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
+      const oneMonthAgo    = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
       let lastVisitBg = null;
-      if (lastVisit < sixMonthsAgo)     lastVisitBg = '#70ad47'; // 6ヶ月以上来店なし：緑
-      else if (lastVisit < oneMonthAgo) lastVisitBg = '#fff2cc'; // 30日以上来店なし：薄黄色
+      if      (lastVisit < sevenMonthsAgo) lastVisitBg = null;       // 7ヶ月以上：塗りつぶしなし
+      else if (lastVisit < sixMonthsAgo)   lastVisitBg = '#a9d18e'; // 6〜7ヶ月：黄緑
+      else if (lastVisit < oneMonthAgo)    lastVisitBg = '#fff2cc'; // 30日〜6ヶ月：薄黄
       lastVisitBgs.push([lastVisitBg]);
     } else {
       lastVisitVals.push([row[COL_LAST_VISIT] !== undefined ? row[COL_LAST_VISIT] : '']);
@@ -133,14 +137,12 @@ function _updateDatesInSheet(src) {
   }
 }
 
-// グループ列の中で最後に入力されたマーカーを返す
-function _lastGroupMarker(row) {
-  let last = null;
-  for (let c = COL_GRP; c + 3 < row.length; c += 7) {
-    const m = String(row[c] || '').trim();
-    if (m) last = m;
+// Q列以降のグループ列にデータ（数字・文字）があるか確認
+function _hasAnyGroupData(row) {
+  for (let c = COL_GRP; c < row.length; c++) {
+    if (String(row[c] || '').trim()) return true;
   }
-  return last;
+  return false;
 }
 
 // 有効期限を計算
