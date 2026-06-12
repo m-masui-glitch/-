@@ -68,11 +68,13 @@ function _updateDatesInSheet(src) {
     const expiry = _calcExpiry(row, fontColors, r);
     if (expiry) {
       expiryVals.push([expiry]);
-      // 残り7日以内→赤 / 残り8〜30日→薄赤 / 超過・31日以上→色なし
+      // F列色分け：残り日数に応じて4段階
       const daysLeft = (expiry - today) / 86400000;
       let expiryBg = null;
-      if (daysLeft >= 0 && daysLeft <= 7)        expiryBg = '#ea4335'; // 7日以内：赤
-      else if (daysLeft > 7 && daysLeft <= 30)   expiryBg = '#f4cccc'; // 8〜30日：薄赤
+      if (daysLeft < 0)          expiryBg = '#b7b7b7'; // 期限切れ：グレー
+      else if (daysLeft <= 7)    expiryBg = '#ff9900'; // 残り7日以内：オレンジ
+      else if (daysLeft <= 30)   expiryBg = '#fce4ec'; // 残り8〜30日：ピンク
+      else if (daysLeft <= 60)   expiryBg = '#fffde7'; // 残り31〜60日：クリーム
       expiryBgs.push([expiryBg]);
     } else {
       expiryVals.push([row[COL_EXPIRY] !== undefined ? row[COL_EXPIRY] : '']);
@@ -100,6 +102,10 @@ function _updateDatesInSheet(src) {
   gRange.setValues(lastVisitVals);
   gRange.setBackgrounds(lastVisitBgs);
   gRange.setNumberFormat('yyyy/mm/dd');
+  // G3 は日付ではなく「最終来店日」ラベルとして固定
+  if (numRows >= 3) {
+    src.getRange(3, COL_LAST_VISIT + 1).setValue('最終来店日').setNumberFormat('@').setBackground(null);
+  }
 }
 
 // 有効期限を計算
@@ -164,13 +170,26 @@ function _expiryDate(date, months) {
   return new Date(date.getFullYear(), date.getMonth() + months, date.getDate() - 1);
 }
 
+// スプレッドシートのタイムゾーンをキャッシュして返す
+let _TIMEZONE = null;
+function _tz() {
+  if (!_TIMEZONE) {
+    try { _TIMEZONE = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(); }
+    catch(e) { _TIMEZONE = Session.getScriptTimeZone(); }
+  }
+  return _TIMEZONE;
+}
+
 // 値をDateオブジェクトに変換
 // refDate を渡すと、M/D形式の年を「refDate以降になる年」で補完する
 function _toDate(val, refDate) {
   if (!val) return null;
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return null;
-    return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+    // スプレッドシートのタイムゾーンで正しく日付を読む（UTC→ローカル変換のズレを防ぐ）
+    const s = Utilities.formatDate(val, _tz(), 'yyyy/M/d');
+    const p = s.split('/');
+    return new Date(+p[0], +p[1] - 1, +p[2]);
   }
   const s = String(val).trim();
   if (!s) return null;
@@ -329,8 +348,6 @@ function _checkExpired(row, r, backgrounds) {
   if (COL_EXPIRY < 0) return false;
   const val = row[COL_EXPIRY];
   if (!val || String(val).trim() === '') return true;
-  if (_isRed(_bg(backgrounds, r, COL_EXPIRY))) return true;
-  // 有効期限日が今日より前なら期限切れ
   const d = _toDate(val);
   if (d) {
     const today = new Date();
