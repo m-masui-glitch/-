@@ -88,12 +88,11 @@ function _updateDatesInSheet(src) {
     const expiry = _calcExpiry(row, fontColors, r);
     if (expiry) {
       expiryVals.push([expiry]);
-      // F列色分け：残り日数に応じて4段階
+      // F列色分け：残り日数に応じて3段階
       const daysLeft = (expiry - today) / 86400000;
       let expiryBg = null;
       if (daysLeft < 0)          expiryBg = '#b7b7b7'; // 期限切れ：グレー
-      else if (daysLeft <= 7)    expiryBg = '#ff9900'; // 残り7日以内：オレンジ
-      else if (daysLeft <= 30)   expiryBg = '#fce4ec'; // 残り8〜30日：ピンク
+      else if (daysLeft <= 30)   expiryBg = '#fce4ec'; // 残り0〜30日：ピンク
       else if (daysLeft <= 60)   expiryBg = '#fffde7'; // 残り31〜60日：クリーム
       expiryBgs.push([expiryBg]);
     } else {
@@ -105,9 +104,12 @@ function _updateDatesInSheet(src) {
     const lastVisit = _calcLastVisit(row, fontColors, r);
     if (lastVisit) {
       lastVisitVals.push([lastVisit]);
-      // 1ヶ月来店なしは黄色
-      const oneMonthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
-      lastVisitBgs.push([lastVisit < oneMonthAgo ? '#fff2cc' : null]);
+      const oneMonthAgo  = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+      const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
+      let lastVisitBg = null;
+      if (lastVisit < sixMonthsAgo)     lastVisitBg = '#70ad47'; // 6ヶ月以上来店なし：緑
+      else if (lastVisit < oneMonthAgo) lastVisitBg = '#fff2cc'; // 30日以上来店なし：薄黄色
+      lastVisitBgs.push([lastVisitBg]);
     } else {
       lastVisitVals.push([row[COL_LAST_VISIT] !== undefined ? row[COL_LAST_VISIT] : '']);
       lastVisitBgs.push([null]);
