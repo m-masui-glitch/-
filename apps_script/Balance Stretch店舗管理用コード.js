@@ -145,6 +145,16 @@ function _hasAnyGroupData(row) {
   return false;
 }
 
+// Q列以降で最後（最も右）のグループマーカーが✕/×かどうかを確認
+function _lastGroupMarkerIsCancelled(row) {
+  let lastMarker = '';
+  for (let c = COL_GRP; c + 3 < row.length; c += 7) {
+    const marker = String(row[c] || '').trim();
+    if (marker) lastMarker = marker;
+  }
+  return lastMarker === '✕' || lastMarker === '×';
+}
+
 // 有効期限を計算
 // - 4/8/12回券あり → 最新〇の購入日（col+2）+ 6ヶ月の月末
 // - 3回券のみ     → L列（初回日）+ 3ヶ月の月末
@@ -279,7 +289,7 @@ function updateCouponSummary() {
 
     const tVal      = String(row[COL_T] || '').trim();
     const isExpired = _checkExpired(row, r, backgrounds);
-    const isChurned = (tVal === '×' || tVal === '✕');
+    const isChurned = (tVal === '×' || tVal === '✕') || _lastGroupMarkerIsCancelled(row);
 
     const sessions3k = [COL_3K, COL_3K + 1, COL_3K + 2].filter(c =>
       _isSessionDate(row[c]) && _isBlackText(_fc(fontColors, r, c))
