@@ -135,6 +135,15 @@ function _updateDatesInSheet(src) {
   if (numRows >= 2) {
     src.getRange(2, COL_LAST_VISIT + 1).setValue('最終来店日').setNumberFormat('@').setBackground(null);
   }
+  // F3・F4: 有効期限の色分け凡例ラベルを固定表示
+  if (numRows >= 3) {
+    src.getRange(3, COL_EXPIRY + 1).setValue('要注意（1ヶ月前）').setNumberFormat('@').setBackground('#fce4ec');
+    src.getRange(3, COL_LAST_VISIT + 1).setValue('1ヶ月以上来店なし').setNumberFormat('@').setBackground('#fff2cc');
+  }
+  if (numRows >= 4) {
+    src.getRange(4, COL_EXPIRY + 1).setValue('注意（2か月前）').setNumberFormat('@').setBackground('#fffde7');
+    src.getRange(4, COL_LAST_VISIT + 1).setValue('6か月経過').setNumberFormat('@').setBackground('#a9d18e');
+  }
 }
 
 // Q列以降のグループ列にデータ（数字・文字）があるか確認
