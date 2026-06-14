@@ -64,8 +64,8 @@ function _updateDatesInSheet(src) {
   const data       = range.getValues();
   const fontColors = range.getFontColors();
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const _now = new Date();
+  const today = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), _now.getUTCDate()));
 
   const expiryVals    = [];
   const expiryBgs     = [];
@@ -109,9 +109,9 @@ function _updateDatesInSheet(src) {
     const lastVisit = _calcLastVisit(row, fontColors, r);
     if (lastVisit) {
       lastVisitVals.push([lastVisit]);
-      const sevenMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 7, today.getDate());
-      const sixMonthsAgo   = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
-      const thirtyDaysAgo  = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
+      const sevenMonthsAgo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 7, today.getUTCDate()));
+      const sixMonthsAgo   = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 6, today.getUTCDate()));
+      const thirtyDaysAgo  = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 30));
       let lastVisitBg = null;
       if      (lastVisit <= sevenMonthsAgo) lastVisitBg = null;       // 7ヶ月以上：塗りつぶしなし
       else if (lastVisit <= sixMonthsAgo)   lastVisitBg = '#a9d18e'; // 6ヶ月〜7ヶ月：黄緑
@@ -223,7 +223,7 @@ function _calcLastVisit(row, fontColors, r) {
 
 // 購入日 + N ヶ月 - 1日（例: 1月10日 + 6 → 7月9日、3月7日 + 6 → 9月6日）
 function _expiryDate(date, months) {
-  return new Date(date.getFullYear(), date.getMonth() + months, date.getDate() - 1);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate() - 1));
 }
 
 // スプレッドシートのタイムゾーンをキャッシュして返す
@@ -245,22 +245,22 @@ function _toDate(val, refDate) {
     // スプレッドシートのタイムゾーンで正しく日付を読む（UTC→ローカル変換のズレを防ぐ）
     const s = Utilities.formatDate(val, _tz(), 'yyyy/M/d');
     const p = s.split('/');
-    return new Date(+p[0], +p[1] - 1, +p[2]);
+    return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
   }
   const s = String(val).trim();
   if (!s) return null;
   // 年付きフォーマット（2026/4/8, 2026-04-08, 2026年4月8日）
   const full = s.match(/(\d{4})[年\/\-](\d{1,2})[月\/\-](\d{1,2})/);
-  if (full) return new Date(+full[1], +full[2] - 1, +full[3]);
+  if (full) return new Date(Date.UTC(+full[1], +full[2] - 1, +full[3]));
   // 月/日 または 月月日日（年なし）
   const md = s.match(/^(\d{1,2})[\/月](\d{1,2})日?$/);
   if (md) {
     const month    = +md[1] - 1;
     const day      = +md[2];
-    const baseYear = refDate ? refDate.getFullYear() : new Date().getFullYear();
-    const d        = new Date(baseYear, month, day);
+    const baseYear = refDate ? refDate.getUTCFullYear() : new Date().getUTCFullYear();
+    const d        = new Date(Date.UTC(baseYear, month, day));
     // 購入日より前になる場合は翌年として補完
-    if (refDate && d < refDate) return new Date(baseYear + 1, month, day);
+    if (refDate && d < refDate) return new Date(Date.UTC(baseYear + 1, month, day));
     return d;
   }
   return null;
@@ -406,8 +406,8 @@ function _checkExpired(row, r, backgrounds) {
   if (!val || String(val).trim() === '') return true;
   const d = _toDate(val);
   if (d) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const _n = new Date();
+    const today = new Date(Date.UTC(_n.getUTCFullYear(), _n.getUTCMonth(), _n.getUTCDate()));
     return d < today;
   }
   return false;
@@ -661,8 +661,8 @@ function _runMonthlyReport(year, month) {
   const fontColors  = range.getFontColors();
   const backgrounds = range.getBackgrounds();
 
-  const targetStart = new Date(year, month - 1, 1);
-  const targetEnd   = new Date(year, month, 0);
+  const targetStart = new Date(Date.UTC(year, month - 1, 1));
+  const targetEnd   = new Date(Date.UTC(year, month, 0));
 
   const customers = [];
 
