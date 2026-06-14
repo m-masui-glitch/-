@@ -92,7 +92,7 @@ function _updateDatesInSheet(src) {
     const isCancelled = mIsCancelled && !_hasAnyGroupData(row);
     const expiry = isCancelled ? null : _calcExpiry(row, fontColors, r);
     if (expiry) {
-      expiryVals.push([expiry]);
+      expiryVals.push([_fmtDateYMD(expiry)]);
       // F列色分け：残り日数に応じて3段階
       const daysLeft = (expiry - today) / 86400000;
       let expiryBg = null;
@@ -108,7 +108,7 @@ function _updateDatesInSheet(src) {
     // G列：最終来店日（黒文字の最新日付）
     const lastVisit = _calcLastVisit(row, fontColors, r);
     if (lastVisit) {
-      lastVisitVals.push([lastVisit]);
+      lastVisitVals.push([_fmtDateYMD(lastVisit)]);
       const sevenMonthsAgo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 7, today.getUTCDate()));
       const sixMonthsAgo   = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 6, today.getUTCDate()));
       const thirtyDaysAgo  = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 30));
@@ -127,10 +127,10 @@ function _updateDatesInSheet(src) {
   const gRange = src.getRange(1, COL_LAST_VISIT + 1, numRows, 1);
   fRange.setValues(expiryVals);
   fRange.setBackgrounds(expiryBgs);
-  fRange.setNumberFormat('yyyy/mm/dd');
+  fRange.setNumberFormat('@');
   gRange.setValues(lastVisitVals);
   gRange.setBackgrounds(lastVisitBgs);
-  gRange.setNumberFormat('yyyy/mm/dd');
+  gRange.setNumberFormat('@');
   // G2 は日付ではなく「最終来店日」ラベルとして固定
   if (numRows >= 2) {
     src.getRange(2, COL_LAST_VISIT + 1).setValue('最終来店日').setNumberFormat('@').setBackground(null);
@@ -536,6 +536,15 @@ function _expiredHeader() {
   return h;
 }
 
+// UTCベースで日付を 'yyyy/mm/dd' 文字列にフォーマット
+function _fmtDateYMD(d) {
+  if (!d) return '';
+  const y  = d.getUTCFullYear();
+  const m  = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dy = String(d.getUTCDate()).padStart(2, '0');
+  return y + '/' + m + '/' + dy;
+}
+
 // ユーティリティ
 function _fmtDate(val) {
   if (!val) return '';
@@ -694,7 +703,7 @@ function _runMonthlyReport(year, month) {
     }
 
     const lastVisitRaw = row[COL_LAST_VISIT];
-    const lastVisit    = lastVisitRaw instanceof Date ? lastVisitRaw : null;
+    const lastVisit    = lastVisitRaw instanceof Date ? lastVisitRaw : _toDate(lastVisitRaw);
     let renewalDate    = null;
     if (lastVisit) {
       renewalDate = new Date(lastVisit.getTime());
