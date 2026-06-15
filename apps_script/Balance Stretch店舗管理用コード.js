@@ -21,8 +21,8 @@ const COL_EXPIRY         = 5;   // F列：有効期限（自動入力）
 const COL_LAST_VISIT     = 6;   // G列：最終来店日（自動入力）
 const COL_FIRST_VISIT_3K = 11;  // L列：初回来店日（3回券の有効期限起算日）
 const COL_T              = 12;  // M列：更新列（分類用・表には出力しない）
-const COL_3K             = 13;  // N列：3回券セッション開始
-const COL_GRP            = 16;  // Q列：7列グループ開始
+const COL_3K             = 14;  // O列：3回券セッション開始（N列は購入マーカー）
+const COL_GRP            = 17;  // R列：7列グループ開始
 // ================
 
 // ===== レポート設定 =====
