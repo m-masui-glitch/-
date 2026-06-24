@@ -105,8 +105,8 @@ function _updateDatesInSheet(src) {
       expiryBgs.push([null]);
     }
 
-    // G列：最終来店日（黒文字の最新日付）
-    const lastVisit = _calcLastVisit(row, fontColors, r);
+    // G列：最終来店日（黒文字の最新日付。なければL列初回日をフォールバック）
+    const lastVisit = _calcLastVisit(row, fontColors, r) || _toDate(row[COL_FIRST_VISIT_3K]);
     if (lastVisit) {
       lastVisitVals.push([_fmtDateYMD(lastVisit)]);
       const sevenMonthsAgo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 7, today.getUTCDate()));
