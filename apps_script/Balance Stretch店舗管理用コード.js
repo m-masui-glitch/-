@@ -1013,14 +1013,12 @@ function _styleRange(range, opts) {
   range.setBorder(true, true, true, true, null, null);
 }
 
-// ===== メニュー・トリガー =====
+// ===== メニュー =====
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   const menu = ui.createMenu('回数券管理');
   menu.addItem('集計表を今すぐ更新', 'updateCouponSummary');
   menu.addItem('F・G列の日付のみ更新する', 'updateDates');
-  menu.addItem('自動更新を設定する（1時間ごと）', 'setupTrigger');
-  menu.addItem('自動更新を止める', 'removeTrigger');
   menu.addSeparator();
   menu.addItem('翌月レポートを今すぐ生成', 'generateNextMonthReport');
   menu.addItem('対象月を手動指定してレポート生成', 'generateReportWithPrompt');
@@ -1029,14 +1027,4 @@ function onOpen() {
   menu.addItem('レポート出力先を確認・変更', 'showReportSpreadsheetInfo');
   menu.addItem('レポート出力先を新規作成', 'resetReportSpreadsheet');
   menu.addToUi();
-}
-function setupTrigger() {
-  removeTrigger();
-  ScriptApp.newTrigger('updateCouponSummary').timeBased().everyHours(1).create();
-  SpreadsheetApp.getUi().alert('1時間ごとの自動更新を設定しました。');
-}
-function removeTrigger() {
-  ScriptApp.getProjectTriggers()
-    .filter(t => t.getHandlerFunction() === 'updateCouponSummary')
-    .forEach(t => ScriptApp.deleteTrigger(t));
 }
