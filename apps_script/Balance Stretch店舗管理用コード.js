@@ -21,8 +21,8 @@ const COL_EXPIRY         = 5;   // F列：有効期限（自動入力）
 const COL_LAST_VISIT     = 6;   // G列：最終来店日（自動入力）
 const COL_FIRST_VISIT_3K = 11;  // L列：初回来店日（3回券の有効期限起算日）
 const COL_T              = 12;  // M列：更新列（分類用・表には出力しない）
-const COL_3K             = 14;  // O列：3回券セッション開始（N列は購入マーカー）
-const COL_GRP            = 17;  // R列：7列グループ開始
+let COL_3K             = 14;  // デフォルト（起動時に自動検出して上書き）
+let COL_GRP            = 17;  // デフォルト（起動時に自動検出して上書き）
 // ================
 
 // ===== レポート設定 =====
@@ -47,6 +47,18 @@ const COLORS = {
 
 // ===== F・G列の自動更新 =====
 
+// ヘッダー行（2行目）の「1/3」の位置からCOL_3K・COL_GRPを自動検出する
+// 店舗によって列構成が異なるため、毎回実行前に呼び出す
+function _detectColumnLayout(sheet) {
+  const lastCol = Math.min(sheet.getLastColumn(), 60);
+  const headers = sheet.getRange(2, 1, 1, lastCol).getValues()[0];
+  const idx = headers.indexOf('1/3');
+  if (idx >= 0) {
+    COL_3K  = idx;       // 「1/3」の列 = 3回券セッション1開始
+    COL_GRP = idx + 3;   // 「1/3」の3列後 = 7列グループの先頭（マーカー列）
+  }
+}
+
 function updateDates() {
   const ss  = SpreadsheetApp.getActiveSpreadsheet();
   const src = ss.getSheetByName(SOURCE_SHEET_NAME);
@@ -54,6 +66,7 @@ function updateDates() {
     SpreadsheetApp.getUi().alert('「' + SOURCE_SHEET_NAME + '」シートが見つかりません。');
     return;
   }
+  _detectColumnLayout(src);
   _updateDatesInSheet(src);
   SpreadsheetApp.getUi().alert('F列（有効期限）・G列（最終来店日）を更新しました。');
 }
@@ -277,6 +290,8 @@ function updateCouponSummary() {
     );
     return;
   }
+
+  _detectColumnLayout(src);
 
   // F・G列を先に自動更新してから集計
   _updateDatesInSheet(src);
