@@ -1015,6 +1015,16 @@ function _styleRange(range, opts) {
   range.setBorder(true, true, true, true, null, null);
 }
 
+// ===== シート名診断 =====
+function showSheetNames() {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const names = ss.getSheets().map(s => s.getName()).join('\n');
+  SpreadsheetApp.getUi().alert(
+    'このスプレッドシートのシート名（タブ名）一覧:\n\n' + names +
+    '\n\n上記のうち顧客データが入っているシート名を\nコード1行目の SOURCE_SHEET_NAME に設定してください。\n\n現在の設定: 「' + SOURCE_SHEET_NAME + '」'
+  );
+}
+
 // ===== メニュー =====
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
@@ -1028,5 +1038,7 @@ function onOpen() {
   menu.addSeparator();
   menu.addItem('レポート出力先を確認・変更', 'showReportSpreadsheetInfo');
   menu.addItem('レポート出力先を新規作成', 'resetReportSpreadsheet');
+  menu.addSeparator();
+  menu.addItem('【診断】シート名一覧を確認する', 'showSheetNames');
   menu.addToUi();
 }
