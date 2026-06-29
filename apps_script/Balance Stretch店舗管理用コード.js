@@ -678,6 +678,7 @@ function _runMonthlyReport(year, month) {
     return;
   }
 
+  _detectColumnLayout(src);
   _updateDatesInSheet(src);
 
   const range       = src.getDataRange();
