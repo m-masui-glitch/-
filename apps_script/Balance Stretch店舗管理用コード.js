@@ -50,6 +50,7 @@ const COLORS = {
 // ヘッダー行（2行目）の「1/3」の位置からCOL_3K・COL_GRPを自動検出する
 // 店舗によって列構成が異なるため、毎回実行前に呼び出す
 function _detectColumnLayout(sheet) {
+  if (!sheet) return;
   const lastCol = Math.min(sheet.getLastColumn(), 60);
   const headers = sheet.getRange(2, 1, 1, lastCol).getValues()[0];
   const idx = headers.indexOf('1/3');
